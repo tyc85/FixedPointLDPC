@@ -22,7 +22,7 @@ libldpc.so: $(LIBS)
 arrayldpc.o: ArrayLDPC.cpp ArrayLDPC.h ArrayLDPCMacro.h
 
 #memory.o: Memory.cpp Memory.h
-perftest.o: PerfTest.cpp PerfTest.h
+perftest.o: PerfTest.cpp ArrayLDPC.h ArrayLDPCMacro.h
 
 rvgs.o: rvgs.cpp rvgs.h 
 
