@@ -1,0 +1,8 @@
+# no .o and .a files
+.[oa]
+
+# ignore the build directory
+build/
+
+
+
