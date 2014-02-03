@@ -3,8 +3,11 @@
 #include <math.h>
 #include <string.h>
 #include <iostream>
+#include <fstream>
 #include "ArrayLDPCMacro.h"
 #include "ArrayLDPC.h"
+#include "rngs.h"
+#include "rvgs.h"
 //#include <windows.h>
 //-----------------------
 #include <time.h>
@@ -116,7 +119,7 @@ int ArrayLDPC_PerfTest(double db_start, double db_end, double db_step, char* Fil
 
 int ArrayLDPC_TimeTrial(double db, int MaxPckNum, char* Filename)
 {
-	char Filename2[40]="";
+	//char Filename2[40]="";
 	int InfoBit[INFO_LENGTH];
 	int i, j;
 	int CurrentInd = 0;
@@ -142,28 +145,26 @@ int ArrayLDPC_TimeTrial(double db, int MaxPckNum, char* Filename)
 	class FP_Decoder Decoder;
 	class ControlFSM FSM;
 
-	ofstream FilePtr(Filename);
-	if(!FilePtr)
-	{
-		cerr << "failed to open " << Filename << endl;
-		system("pause");
-		exit(0);
-	}
-	FilePtr.close();
+	//ofstream FilePtr(Filename);
+	//if(!FilePtr)
+	//{
+	//	cerr << "failed to open " << Filename << endl;
+	//	system("pause");
+	//	exit(0);
+	//}
+	//FilePtr.close();
 	//strcat(Filename2, "log_");
 	//strcat(Filename2, Filename);
 	//strcat(Filename2, ".txt");
-	sprintf(Filename2, "%s_log.txt", Filename);
-	ofstream LogPtr(Filename2);
-	if(!LogPtr)
-	{
-		cerr << "failed to open " << Filename2 << endl;
-		system("pause");
-		exit(0);
-	}
-	LogPtr.close();
-
-	
+	//sprintf(Filename2, "%s_log.txt", Filename);
+	//ofstream LogPtr(Filename2);
+	//if(!LogPtr)
+	//{
+	//	cerr << "failed to open " << Filename2 << endl;
+	//	system("pause");
+	//	exit(0);
+	//}
+	//LogPtr.close();	
 	//cout << "SNR? ";
 	//cin >> EbN0_dB;
 	EbN0_dB = db;
@@ -172,6 +173,13 @@ int ArrayLDPC_TimeTrial(double db, int MaxPckNum, char* Filename)
 	Sigma = sqrt(1/EbN0);
 	BitError = 0;
 	Clk = 0;
+
+	//---- linux version timing 
+	int sr=0,trials = MaxPckNum,framebits=CWD_LENGTH;
+	//time the running time
+	struct rusage start,finish;
+	double extime;
+	getrusage(RUSAGE_SELF,&start);
 	while(Counter < MaxPckNum)
 	{
 		BlkError = 0;
@@ -194,6 +202,11 @@ int ArrayLDPC_TimeTrial(double db, int MaxPckNum, char* Filename)
 		BitError += BlkError;
 		Counter++;
 	}
+
+	getrusage(RUSAGE_SELF,&finish);
+	extime = finish.ru_utime.tv_sec - start.ru_utime.tv_sec + 1e-6*(finish.ru_utime.tv_usec - start.ru_utime.tv_usec);
+	printf("Execution time for %d %d-bit frames: %.2f sec\n",trials, framebits,extime);
+	printf("decoder speed: %g bits/s\n",trials*framebits/extime);
 	cout << BitError << " " << PckError << " " << Counter << endl
 		<< " FER: " << PckError/Counter << " BER: " << BitError/Counter/CWD_LENGTH << endl;
 	//Decoder.getInfoBit();
@@ -219,18 +232,7 @@ int main(int argc, char *argv[])
 		cout << "simulate how many packets? ( " << 2209 << " is the codeword length ): ";
 		cin >> MaxPckNum;
 
-		//---- code timging for windows
-		//---- linux version timing 
-		int sr=0,trials = 10000,errcnt,framebits=2048;
-		//time the running time
-		struct rusage start,finish;
-		double extime;
-		getrusage(RUSAGE_SELF,&start);
 		ArrayLDPC_TimeTrial(db_start, MaxPckNum, "timing.txt");
-		getrusage(RUSAGE_SELF,&finish);
-		extime = finish.ru_utime.tv_sec - start.ru_utime.tv_sec + 1e-6*(finish.ru_utime.tv_usec - 			start.ru_utime.tv_usec);
-		printf("Execution time for %d %d-bit frames: %.2f sec\n",trials, framebits,extime);
-		printf("decoder speed: %g bits/s\n",trials*framebits/extime);
 
 		/*  // Windows version
 		__int64 ctr1 = 0, ctr2 = 0, freq = 0;

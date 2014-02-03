@@ -12,7 +12,7 @@
 //#define CIRCULANT_SIZE 32
 
 using namespace std;
-enum Simulation {MAX_ITER = 30, NUM_PEEK = 1000000, SEED = 100};
+enum Simulation {MAX_ITER = 10, NUM_PEEK = 1000000, SEED = 100};
 enum Code {
 		NUM_VAR = 2209, NUM_CHK = 235, NUM_CGRP = 5, VAR_DEG = 5, NUM_VGRP = 47, 
 		CHK_DEG = 47, P = 47, CIR_SIZE = 47, INFO_LENGTH = 1978, CWD_LENGTH = 2209};

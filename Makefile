@@ -2,9 +2,9 @@ TARGET = fpldpc
 CC = g++
 CFLAGS = -O3 
 
-OBJECTS = TurboCode.o Noise.o Decoder.o Encoder.o Interleaver.o Array.o SubBlkInt.o
+OBJECTS = ArrayLDPC.o
 
-SOURCE = ArrayLDPC.cpp rvgs.cpp Memory.cpp PerfTest.cpp
+SOURCE = ArrayLDPC.cpp rngs.cpp rvgs.cpp PerfTest.cpp
 
 
   
