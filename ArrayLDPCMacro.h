@@ -12,7 +12,7 @@
 //#define CIRCULANT_SIZE 32
 
 using namespace std;
-enum Simulation {MAX_ITER = 30, NUM_PEEK = 1000000, SEED = 100};
+enum Simulation {MAX_ITER = 10, NUM_PEEK = 1000000, SEED = 100};
 enum Code {
 		NUM_VAR = 2209, NUM_CHK = 235, NUM_CGRP = 5, VAR_DEG = 5, NUM_VGRP = 47, 
 		CHK_DEG = 47, P = 47, CIR_SIZE = 47, INFO_LENGTH = 1978, CWD_LENGTH = 2209};
@@ -117,15 +117,15 @@ public:
 	int sgn(double);
 	int sgn(int);
 	int sxor(int, int);
-	int min(int, int);
-	int max(int, int);
+	int fmin(int, int);
+	int fmax(int, int);
 	int checkPost();
 	int checkPost_fp();
 	int getPost_fp(int Addr){ return Posteriori_fp[Addr]; };
 	int getState(){ return FSM.getState();  };
 	void setState(int in){ FSM.setState(in);  };
 
-	double min(double, double);
+	double fmin(double, double);
 	double getPost(int Addr){ return Posteriori[Addr]; };
 	double getRate(){ return CodeROM.getRate(); };
 	double sxor(double, double);
@@ -140,6 +140,7 @@ private:
 	int Posteriori_fp[CWD_LENGTH];
 	double Posteriori[CWD_LENGTH];
 	int BitError;
+	// shifting a fixed point fractional numbers to a binary representation
 	static const int Constant = (5.0/8.0)*(1 << FRAC_WIDTH);
 };
 
@@ -169,13 +170,13 @@ inline int FP_Decoder::sgn(int x){
 	return (x > 0)?1:-1;
 }
 
-inline double FP_Decoder::min(double x, double y){		
+inline double FP_Decoder::fmin(double x, double y){		
 	if(x <= y)
 		return x;
 	else
 		return y;
 }
-inline int FP_Decoder::min(int x, int y){		
+inline int FP_Decoder::fmin(int x, int y){		
 	if(x <= y)
 		return x;
 	else
