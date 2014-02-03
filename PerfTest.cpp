@@ -17,6 +17,7 @@
 using std::endl;
 using std::cout;
 using std::cin;
+using std::ofstream;
 
 //---------------------------- Non in-class code
 void noMoreMemory()

@@ -6,8 +6,8 @@
 #include <iostream>
 #include "ArrayLDPCMacro.h"
 #include "ArrayLDPC.h"
-#include <windows.h>
-
+//#include <windows.h>
+#include "PerfTest.h"
 
 using std::endl;
 using std::cout;
