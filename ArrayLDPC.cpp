@@ -26,51 +26,74 @@ FP_Encoder::~FP_Encoder()
 	for(i = 0; i < Gdimy; i++ )
 		delete [] GeneratorMat[i];
 	
+	delete [] InfoBuffer;
 	delete [] GeneratorMat;
 }
-
 FP_Encoder::FP_Encoder(char* Filename, int flag)
 {
-	ifstream FileStr(Filename);
-	if(flag == 1)// alist file format
-	{
-		int vnum, cnum, vdeg_max, cdeg_max;
-		FileStr >> vnum;
-		FileStr >> cnum;
-		FileStr >> vdeg_max;
-		FileStr >> cdeg_max;
-		int i, j;
-		//for(i = 0; i < vnum;i++)
+	//cout << "reading file" << Filename << endl;
+	
+	try{
+		ifstream FileStr(Filename);
+		FileStr.exceptions ( ifstream::failbit | ifstream::badbit );
+		//if(!FileStr)
 		//{
-		//	 FileStr >> VarDeg[i];
+		//	cout << "fail to read the file" <<endl;
 		//}
-	}
-	else if(flag == 0) // binary file format (the generator matrix in binary)
-	{
-		int par_num, *par_idx, info_num;
-		FileStr >> par_num; //
-		FileStr >> info_num;
-		Gdimx = par_num;
-		Gdimy = info_num;
-		int i, j;
-		ParityIndex = new unsigned int[Gdimx];
-		InfoIndex = new unsigned int[Gdimy];
-		GeneratorMat = new unsigned int*[Gdimy];
-		for(i = 0; i < Gdimy; i++)
+		if(flag == 1)// alist file format
 		{
-			GeneratorMat[i] = new unsigned int [Gdimx];
+			int vnum, cnum, vdeg_max, cdeg_max;
+			FileStr >> vnum;
+			FileStr >> cnum;
+			FileStr >> vdeg_max;
+			FileStr >> cdeg_max;
+			int i, j;
+			//for(i = 0; i < vnum;i++)
+			//{
+			//	 FileStr >> VarDeg[i];
+			//}
 		}
-		for(i = 0; i < Gdimx; i++)
-			FileStr >> ParityIndex[i];
-		for(i = 0; i < Gdimy; i++)
-			FileStr >> InfoIndex[i];
-		for(i = 0; i < info_num; i++)
+		else if(flag == 0) // binary file format (the generator matrix in binary)
 		{
-			for(j = 0; j < par_num; j++)
+			int par_num, info_num;
+			int i, j;
+			FileStr >> par_num; //
+			FileStr >> info_num;
+			Gdimx = par_num;
+			Gdimy = info_num;
+			InfoLen = Gdimy;
+		
+			ParityIndex = new unsigned int[Gdimx];
+			InfoIndex = new unsigned int[Gdimy];
+			GeneratorMat = new unsigned int*[Gdimy];
+			InfoBuffer = new unsigned int [InfoLen];
+			for(i = 0; i < Gdimy; i++)
 			{
-				FileStr >> GeneratorMat[i][j];
+				GeneratorMat[i] = new unsigned int [Gdimx];
+			}
+			for(i = 0; i < Gdimx; i++)
+				FileStr >> ParityIndex[i];
+			for(i = 0; i < Gdimy; i++)
+				FileStr >> InfoIndex[i];
+			for(i = 0; i < info_num; i++)
+			{
+				for(j = 0; j < par_num; j++)
+				{
+					FileStr >> GeneratorMat[i][j];
+				}
 			}
 		}
+	}
+	
+	
+	catch (ifstream::failure e) {
+		cout << "Exception opening/reading file" << endl;
+		system("pause");
+		exit(0);
+	}
+	catch (std::bad_alloc& ba)
+	{
+		std::cerr << "bad_alloc caught: " << ba.what() << '\n';
 	}
 }
 
@@ -78,26 +101,73 @@ FP_Encoder::FP_Encoder(char* Filename, int flag)
 int FP_Encoder::encode(char *in, int *out, int in_len)
 {
 	int i, j, k, counter = 0;
-	unsigned int *info_temp;
+	int out_len = 2209;
+	int num_blks;
+	//unsigned int *info_temp;
 	//unsigned int *codeword;
 	unsigned int temp;
 	// ideally in_len is matching Gdimy/8
 	// if not matching just pad zero
 	// output codeword bitwise stored in output
-	info_temp = new unsigned int [InfoLen];
+	
+	// calculate the number of codeword blocks to output
+	num_blks = in_len*sizeof(char)/InfoLen + (in_len*sizeof(char) % InfoLen > 0? 1:0);
+	out = new int[out_len*num_blks]; // later change to unsigned
 
+	//for(i = 0; i<num_blks; i++)
+	//{
+		// unload the information bits from the char array till the 
+		// second last element
+	for(i = 0; i < in_len-1; i++)
+	{
+		for(j = 0; j < 8; j++)// per byte
+		{	
+			InfoBuffer[counter] = (in[i] >> j) & 1;
+			counter ++;
+		}
+	}
+	// unload the remaining bits from the last element 
+	for(j = 0; j < InfoLen % 8; j++)
+	{
+		InfoBuffer[counter] = (in[in_len-1] >> j) & 1;
+		counter ++;
+	}
+	//}
+	for(i = 0; i < Gdimy; i++)
+	{
+		Codeword[InfoIndex[i]] = InfoBuffer[i];
+	}
+	for(i = 0; i < Gdimx; i++)
+	{
+		temp = 0;
+		for(j = 0; j < Gdimy; j++)
+		{
+			temp ^= (GeneratorMat[j][i]&InfoBuffer[j]);
+		}
+		Codeword[ParityIndex[i]] = temp;
+	}
+	return out_len;
 }
 
 int FP_Encoder::encode(char *in, char *out, int in_len)
 {
 	int i, j, k, counter = 0;
+	int num_blks;
 	unsigned int *info_temp;
 	//unsigned int *codeword;
 	unsigned int temp;
+	int out_len;
 	// ideally in_len is matching Gdimy/8
 	// if not matching just pad zero
 	// output codeword bitwise stored in output
 	info_temp = new unsigned int [InfoLen];
+
+
+	// calculate the number of codeword blocks to output
+	num_blks = in_len*sizeof(char)/InfoLen + (in_len*sizeof(char) % InfoLen > 0? 1:0);
+
+	// unload the information bits from the char array till the 
+	// second last element
 	for(i = 0; i < in_len-1; i ++)
 	{
 		for(j = 0; j < 8; j++)// per byte
@@ -106,17 +176,18 @@ int FP_Encoder::encode(char *in, char *out, int in_len)
 			counter ++;
 		}
 	}
+	// unload the remaining bits from the last element 
 	for(j = 0; j < InfoLen % 8; j++)
 	{
 		info_temp[counter] = (in[in_len-1] >> j) & 1;
 		counter ++;
 	}
-	// calculate how many char is needed to output the codeword
-	int out_len = InfoLen/8+(InfoLen %8 > 0? 1:0);
+	
+	
 	// temp test: 2209 /8 = 151
 	// temp test residual: 1
 	// zero padding = 7
-	int pad_len = 8 - InfoLen %8;
+	int pad_len = 8 - NUM_VAR %8;
 	// should be improved to do xoring 32 bits at a time
 	for(i = 0; i < Gdimy; i++)
 	{
@@ -132,6 +203,11 @@ int FP_Encoder::encode(char *in, char *out, int in_len)
 		Codeword[ParityIndex[i]] = temp;
 	}
 	// allocate the memory in the function or not?
+	// hard coded output length. Potentiall we should take more than one block
+	// of input streams and coded into multiple codeword blocks
+
+	// calculate how many char is needed to output the codeword
+	out_len = num_blks*NUM_VAR/8 + (num_blks*NUM_VAR % 8 > 0? 1:0);
 	out = new char[out_len];
 	// stuff the codeword into an array of char
 	for(i = 0; i < NUM_VAR; i++)
@@ -139,7 +215,7 @@ int FP_Encoder::encode(char *in, char *out, int in_len)
 		// increase the index by one every 8 bits (one byte)
 		out[i/8] = out[i/8] + Codeword[i];
 		// shift the result to the left one (stuffing in)
-		out[i/8] << 1;
+		out[i/8] = out[i/8]<< 1;
 	}
 	// returning the padding length (or should I return the codeword length?)
 	return out_len;
@@ -173,7 +249,7 @@ int FP_Decoder::checkPost_fp()
 	// full check
 	for(i = 0; i < NUM_VAR; i++)
 	{
-		temp[i] = getPost(i);
+		temp[i] = getPost_fp(i);
 	}
 	for(i = 0; i < NUM_CGRP; i ++)
 	{

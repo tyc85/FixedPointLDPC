@@ -151,6 +151,28 @@ private:
 	static const int Constant = (5.0/8.0)*(1 << FRAC_WIDTH);
 };
 
+//--------------------- Encoder class
+class FP_Encoder
+{
+public:
+	FP_Encoder();
+	~FP_Encoder();
+	FP_Encoder(char*m, int);
+	int encode(char *, char *, int);
+	int encode(char *, int *, int);
+private:
+	int Codeword[NUM_VAR];
+	//int ChkDeg[NUM_VAR];
+	int Gdimx;
+	int Gdimy;
+	int InfoLen;
+	int Codelen;
+	class ROM CodeROM;
+	unsigned int *InfoBuffer;
+	unsigned int *ParityIndex;
+	unsigned int *InfoIndex;
+	unsigned int **GeneratorMat;
+};
 
 
 
@@ -175,27 +197,6 @@ inline int FP_Decoder::fmin(int x, int y){
 		return y;
 }
 
-//--------------------- Encoder class
-class FP_Encoder
-{
-public:
-	FP_Encoder();
-	~FP_Encoder();
-	FP_Encoder(char*m, int);
-	int encode(char *, char *, int);
-	int encode(char *, int *, int);
-private:
-	int Codeword[NUM_VAR];
-	//int ChkDeg[NUM_VAR];
-	int Gdimx;
-	int Gdimy;
-	int InfoLen;
-	int Codelen;
-	class ROM CodeROM;
-	unsigned int *ParityIndex;
-	unsigned int *InfoIndex;
-	unsigned int **GeneratorMat;
-};
 
 #endif
 
