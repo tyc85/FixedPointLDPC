@@ -74,6 +74,19 @@ FP_Encoder::FP_Encoder(char* Filename, int flag)
 	}
 }
 
+// an overloaded function that outputs simple integer array for debugging
+int FP_Encoder::encode(char *in, int *out, int in_len)
+{
+	int i, j, k, counter = 0;
+	unsigned int *info_temp;
+	//unsigned int *codeword;
+	unsigned int temp;
+	// ideally in_len is matching Gdimy/8
+	// if not matching just pad zero
+	// output codeword bitwise stored in output
+	info_temp = new unsigned int [InfoLen];
+
+}
 
 int FP_Encoder::encode(char *in, char *out, int in_len)
 {
@@ -99,7 +112,7 @@ int FP_Encoder::encode(char *in, char *out, int in_len)
 		counter ++;
 	}
 	// calculate how many char is needed to output the codeword
-	int out_len = InfoLen/8+1;
+	int out_len = InfoLen/8+(InfoLen %8 > 0? 1:0);
 	// temp test: 2209 /8 = 151
 	// temp test residual: 1
 	// zero padding = 7
@@ -118,7 +131,8 @@ int FP_Encoder::encode(char *in, char *out, int in_len)
 		}
 		Codeword[ParityIndex[i]] = temp;
 	}
-	
+	// allocate the memory in the function or not?
+	out = new char[out_len];
 	// stuff the codeword into an array of char
 	for(i = 0; i < NUM_VAR; i++)
 	{
@@ -128,7 +142,7 @@ int FP_Encoder::encode(char *in, char *out, int in_len)
 		out[i/8] << 1;
 	}
 	// returning the padding length (or should I return the codeword length?)
-	return 0;
+	return out_len;
 }
 
 

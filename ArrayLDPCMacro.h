@@ -183,6 +183,7 @@ public:
 	~FP_Encoder();
 	FP_Encoder(char*m, int);
 	int encode(char *, char *, int);
+	int encode(char *, int *, int);
 private:
 	int Codeword[NUM_VAR];
 	//int ChkDeg[NUM_VAR];
