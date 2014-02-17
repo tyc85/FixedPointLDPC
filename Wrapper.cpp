@@ -19,10 +19,11 @@ int main(int argc, char *argv[])
 	//char Filename[30];
 	double db_start, db_end, db_step;
 	int i = 0;
-	if(argc == 5)
+	if(argc == 5 || 1)
 	{
 		printf("%.1f, %.1f, %.1f, %s\n", atof(argv[1]),atof(argv[2]),atof(argv[3]),argv[4]);
-		ArrayLDPC_PerfTest(atof(argv[1]), atof(argv[2]), atof(argv[3]), argv[4]);
+		//ArrayLDPC_PerfTest(atof(argv[1]), atof(argv[2]), atof(argv[3]), argv[4]);
+		ArrayLDPC_PerfTest(2, 2, 1, "test.csv");
 	}
 	else
 	{

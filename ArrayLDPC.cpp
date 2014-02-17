@@ -11,7 +11,188 @@
 #include "ArrayLDPC.h"
 #include "ArrayLDPCMacro.h"
 using namespace std;
+//--------- notes -----------
+// 1. don't really need the posterior stored. just the hard decision would be enough
+// 
+//---------------------------
 
+
+//-------------- Encoder part starts
+FP_Encoder::~FP_Encoder()
+{
+	int i;
+	delete [] ParityIndex;
+	delete [] InfoIndex;
+	for(i = 0; i < Gdimy; i++ )
+		delete [] GeneratorMat[i];
+	
+	delete [] GeneratorMat;
+}
+
+FP_Encoder::FP_Encoder(char* Filename, int flag)
+{
+	ifstream FileStr(Filename);
+	if(flag == 1)// alist file format
+	{
+		int vnum, cnum, vdeg_max, cdeg_max;
+		FileStr >> vnum;
+		FileStr >> cnum;
+		FileStr >> vdeg_max;
+		FileStr >> cdeg_max;
+		int i, j;
+		//for(i = 0; i < vnum;i++)
+		//{
+		//	 FileStr >> VarDeg[i];
+		//}
+	}
+	else if(flag == 0) // binary file format (the generator matrix in binary)
+	{
+		int par_num, *par_idx, info_num;
+		FileStr >> par_num; //
+		FileStr >> info_num;
+		Gdimx = par_num;
+		Gdimy = info_num;
+		int i, j;
+		ParityIndex = new unsigned int[Gdimx];
+		InfoIndex = new unsigned int[Gdimy];
+		GeneratorMat = new unsigned int*[Gdimy];
+		for(i = 0; i < Gdimy; i++)
+		{
+			GeneratorMat[i] = new unsigned int [Gdimx];
+		}
+		for(i = 0; i < Gdimx; i++)
+			FileStr >> ParityIndex[i];
+		for(i = 0; i < Gdimy; i++)
+			FileStr >> InfoIndex[i];
+		for(i = 0; i < info_num; i++)
+		{
+			for(j = 0; j < par_num; j++)
+			{
+				FileStr >> GeneratorMat[i][j];
+			}
+		}
+	}
+}
+
+
+int FP_Encoder::encode(char *in, char *out, int in_len)
+{
+	int i, j, k, counter = 0;
+	unsigned int *info_temp;
+	//unsigned int *codeword;
+	unsigned int temp;
+	// ideally in_len is matching Gdimy/8
+	// if not matching just pad zero
+	// output codeword bitwise stored in output
+	info_temp = new unsigned int [InfoLen];
+	for(i = 0; i < in_len-1; i ++)
+	{
+		for(j = 0; j < 8; j++)// per byte
+		{	
+			info_temp[counter] = (in[i] >> j) & 1;
+			counter ++;
+		}
+	}
+	for(j = 0; j < InfoLen % 8; j++)
+	{
+		info_temp[counter] = (in[in_len-1] >> j) & 1;
+		counter ++;
+	}
+	// calculate how many char is needed to output the codeword
+	int out_len = InfoLen/8+1;
+	// temp test: 2209 /8 = 151
+	// temp test residual: 1
+	// zero padding = 7
+	int pad_len = 8 - InfoLen %8;
+	// should be improved to do xoring 32 bits at a time
+	for(i = 0; i < Gdimy; i++)
+	{
+		Codeword[InfoIndex[i]] = info_temp[i];
+	}
+	for(i = 0; i < Gdimx; i++)
+	{
+		temp = 0;
+		for(j = 0; j < Gdimy; j++)
+		{
+			temp ^= (GeneratorMat[j][i]&info_temp[j]);
+		}
+		Codeword[ParityIndex[i]] = temp;
+	}
+	
+	// stuff the codeword into an array of char
+	for(i = 0; i < NUM_VAR; i++)
+	{
+		// increase the index by one every 8 bits (one byte)
+		out[i/8] = out[i/8] + Codeword[i];
+		// shift the result to the left one (stuffing in)
+		out[i/8] << 1;
+	}
+	// returning the padding length (or should I return the codeword length?)
+	return 0;
+}
+
+
+
+//---------------- Ecoder part ends
+//-------------- Decoder part starts
+//---- new part
+int FP_Decoder::checkPost_fp()
+{
+	int i, j, k;
+	int temp[NUM_VAR];
+	unsigned int Shift, VarAddr;
+	unsigned int checksum;
+	BitError = 0;
+	//double temp = 0;
+	// simple check
+	//for(i = 0; i < NUM_VAR; i++)
+	//{
+	//	temp = getPost(i);
+	//	if(getPost_fp(i) < 0)
+	//		BitError++;
+	//}
+	//if(BitError != 0)
+	//	return 1;
+	//else
+	//	return 0;
+
+	// full check
+	for(i = 0; i < NUM_VAR; i++)
+	{
+		temp[i] = getPost(i);
+	}
+	for(i = 0; i < NUM_CGRP; i ++)
+	{
+		for(j = 0; j < CIR_SIZE; j++)
+		{
+			checksum = 0;
+			for(k = 0; k < NUM_VGRP; k++)
+			{
+				Shift = CodeROM.getCirShift(i, k);
+				VarAddr = j + k*NUM_VGRP + Shift;
+				checksum ^= (temp[VarAddr] > 0 ? 0:1);		
+			}
+			if(checksum != 0)
+				return 1;
+		//VarAddr = i*CIR_SIZE + j;
+		//Shift = CodeROM.getCirShift(k, i);
+		//BankSelect = (j + Shift) % CIR_SIZE;	//Select which bank of RAM is active
+		//ChkAddr = (i + k*CHK_DEG);	//The Address within the selected bank of RAM
+		//EdgeRAM[BankSelect].setAddress(ChkAddr);	
+		//EdgeRAM[BankSelect].wrtData(LLR[VarAddr]);
+		//for(i = 0; i < NUM_CGRP; i++)
+		//{
+		//	for(j = 0; j < NUM_VGRP; j++)
+		//	{
+		//		CirShift[i][j] = (i*j) % CirSize;
+		//	}
+		//}
+		}
+	}
+	return 1;
+}
+
+//---- no mod
 int FP_Decoder::sxor(int x, int y){		
 	int v1, v2;
 	int sum;
@@ -201,6 +382,7 @@ inline int FP_Decoder::fmax(int x, int y){
 	else
 		return y;
 }
+
 double FP_Decoder::sxor(double x, double y){		
 	double v1, v2;
 	double sum_abs, diff_abs;
@@ -257,7 +439,7 @@ int FP_Decoder::decode(const double *LLR)
 				for(k = 0; k < CHK_DEG; k++)
 				{
 					//This is simply for better read of the code. Not necessary.
-					Shift = CodeROM.getCirShift(i, k);
+					//Shift = CodeROM.getCirShift(i, k);
 					//-- Prepare all the V2C message
 					//VarAddr = k*47 + Shift;
 					VarAddr = j + k*CHK_DEG;
@@ -341,7 +523,8 @@ int FP_Decoder::decode(const double *LLR)
 	checkPost();
 	return BitError;
 }
-
+// need to modify to really check the parity check matrix
+// use the structure of array code
 int FP_Decoder::checkPost()
 {
 	int i = 0;
@@ -349,7 +532,7 @@ int FP_Decoder::checkPost()
 	double temp = 0;
 	for(i = 0; i < CWD_LENGTH; i++)
 	{
-		temp = getPost(i);
+		//temp = getPost(i);
 		if(getPost(i) < 0)
 			BitError++;
 	}

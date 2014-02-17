@@ -1,6 +1,8 @@
-#ifndef PRE_CODE_MACRO_H
-#define PRE_CODE_MACRO_H
+#ifndef ARRAY_MACRO_H
+#define ARRAY_MACRO_H
 
+
+#include <fstream>
 #include <iostream>
 #include <math.h>
 //---------- Shared constants
@@ -13,6 +15,10 @@
 
 using namespace std;
 enum Simulation {MAX_ITER = 10, NUM_PEEK = 1000000, SEED = 100};
+//enum CodeWifi {
+//		NUM_VAR = 1944, NUM_CHK = 972, NUM_CGRP = 12, VAR_DEG = 24,
+//		P = 81, CIR_SIZE = 81, INFO_LENGTH = 1978, CWD_LENGTH = 1944};
+
 enum Code {
 		NUM_VAR = 2209, NUM_CHK = 235, NUM_CGRP = 5, VAR_DEG = 5, NUM_VGRP = 47, 
 		CHK_DEG = 47, P = 47, CIR_SIZE = 47, INFO_LENGTH = 1978, CWD_LENGTH = 2209};
@@ -108,6 +114,7 @@ private:
 	int CurState;
 };
 
+
 class FP_Decoder
 {
 public:
@@ -144,22 +151,7 @@ private:
 	static const int Constant = (5.0/8.0)*(1 << FRAC_WIDTH);
 };
 
-inline int FP_Decoder::checkPost_fp()
-{
-	int i = 0;
-	BitError = 0;
-	double temp = 0;
-	for(i = 0; i < CWD_LENGTH; i++)
-	{
-		temp = getPost(i);
-		if(getPost_fp(i) < 0)
-			BitError++;
-	}
-	if(BitError != 0)
-		return 1;
-	else
-		return 0;
-}
+
 
 
 inline int FP_Decoder::sgn(double x){
@@ -183,6 +175,26 @@ inline int FP_Decoder::fmin(int x, int y){
 		return y;
 }
 
+//--------------------- Encoder class
+class FP_Encoder
+{
+public:
+	FP_Encoder();
+	~FP_Encoder();
+	FP_Encoder(char*m, int);
+	int encode(char *, char *, int);
+private:
+	int Codeword[NUM_VAR];
+	//int ChkDeg[NUM_VAR];
+	int Gdimx;
+	int Gdimy;
+	int InfoLen;
+	int Codelen;
+	class ROM CodeROM;
+	unsigned int *ParityIndex;
+	unsigned int *InfoIndex;
+	unsigned int **GeneratorMat;
+};
 
 #endif
 
