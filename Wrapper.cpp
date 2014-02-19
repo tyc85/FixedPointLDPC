@@ -18,6 +18,7 @@ int main(int argc, char *argv[])
 {
 	//char Filename[30];
 	double db_start, db_end, db_step;
+	double Rate, EbN0, snr;
 	int i = 0;
 	if(argc == 5)
 	{
@@ -28,6 +29,27 @@ int main(int argc, char *argv[])
 	else if(1) // debugging
 	{
 		ArrayLDPC_Debug();
+		long MaxPckNum;
+		printf("argc = %d \n time trial with: manual input\n", argc);
+		cout << "EbN0 in dB: ";
+		cin >> EbN0;
+		cout << "simulate how many packets? ( " << 2209 << " is the codeword length ): ";
+		cin >> MaxPckNum;
+
+		char InfoStream[248] = "OMG how long should this string be to make it 248, just imagine that. \
+								   I guess it's still not long enough. Let's see. This is a testing string \
+									for a lot of characters so that we have some random bit stream that's\
+									correct";
+		//---- code timging for windows
+
+		//---- encoder trial
+		EncodeTrial(InfoStream, MaxPckNum);
+		//---- decoder trial
+ 		DecodeTrial(EbN0, MaxPckNum);
+		//---- test error rate
+		ArrayLDPC_Debug();
+
+		
 	}
 	else
 	{

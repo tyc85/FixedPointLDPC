@@ -14,7 +14,7 @@
 //#define CIRCULANT_SIZE 32
 
 using namespace std;
-enum Simulation {MAX_ITER = 10, NUM_PEEK = 1000000, SEED = 100};
+enum Simulation {MAX_ITER = 5, NUM_PEEK = 1000000, SEED = 100};
 //enum CodeWifi {
 //		NUM_VAR = 1944, NUM_CHK = 972, NUM_CGRP = 12, VAR_DEG = 24,
 //		P = 81, CIR_SIZE = 81, INFO_LENGTH = 1978, CWD_LENGTH = 1944};
@@ -25,14 +25,14 @@ enum Code {
 enum RAM_Const {
 		RAM_WIDTH = 32, RAM_SLICE = 8, RAM_DEPTH = CHK_DEG*VAR_DEG};
 enum Precision {
-		WIDTH_MASK = 0x000000ff, 
-		SIGN_MASK = 0x00000080, 
+		WIDTH_MASK = 0x000000ff, //8 bit mask
+		SIGN_MASK = 0x00000080, //not really used yet, the 8th bit mask
 		/*INT_WIDTH = 4, 
 		FRAC_WIDTH = 3, 
 		INT_WIDTH_NOISE = 4, 
 		FRAC_WIDTH_NOISE = 12*/
-		INT_WIDTH = 2, 
-		FRAC_WIDTH = 4, 
+		INT_WIDTH = 4, 
+		FRAC_WIDTH = 3, 
 		INT_WIDTH_NOISE = 4, 
 		FRAC_WIDTH_NOISE = 6
 };
@@ -57,8 +57,8 @@ public:
 			}
 		}
 		CodeRate = 1 - double(NUM_CGRP*CirSize -NUM_CGRP+1)/(CirSize*CirSize);
-		cout <<"Array code with circulant size "  << P <<", blocklength " 
-			  << NUM_VAR << ", code rate " << getRate() << endl;
+		//cout <<"Array code with circulant size "  << P <<", blocklength " 
+		//	  << NUM_VAR << ", code rate " << getRate() << endl;
 	};
 	//~ROM();
 	double getRate(){ return CodeRate; };
@@ -79,6 +79,8 @@ private:
 	int NumChk;
 	double CodeRate;
 };
+
+//!!!!! remember to remove the double type BRAM
 class Memory
 {
 public:
@@ -118,7 +120,7 @@ private:
 class FP_Decoder
 {
 public:
-	int InfoBit[INFO_LENGTH];
+	
 	int decode_fixpoint(const int *LLR);
 	int decode(const double *LLR);
 	int sgn(double);
@@ -126,11 +128,19 @@ public:
 	int sxor(int, int);
 	int fmin(int, int);
 	int fmax(int, int);
+	int check();
+	int check_fp(int*); // check whether the input vector pass the parity check matrix
 	int checkPost();
 	int checkPost_fp();
 	int getPost_fp(int Addr){ return Posteriori_fp[Addr]; };
 	int getState(){ return FSM.getState();  };
 	void setState(int in){ FSM.setState(in);  };
+	void setInfoBit(char*, int);
+	void setInfoIndex(int *);
+	void setCodeword(int *);
+	int hardDecision(const int *);  // perform hardecision o input and verfiy check sum
+	int calculateBER();
+	void resetBER(){ BitError = 0;};
 
 	double fmin(double, double);
 	double getPost(int Addr){ return Posteriori[Addr]; };
@@ -144,11 +154,15 @@ private:
 	class ROM CodeROM;
 	class ControlFSM FSM;
 	class Memory EdgeRAM[CIR_SIZE];
+	int DecodedCodeword[CWD_LENGTH];
+	int TrueCodeword[CWD_LENGTH];
+	int TrueInfoBit[INFO_LENGTH];
+	int InfoIndex[INFO_LENGTH];
 	int Posteriori_fp[CWD_LENGTH];
 	double Posteriori[CWD_LENGTH];
 	int BitError;
 	// shifting a fixed point fractional numbers to a binary representation
-	static const int Constant = (5.0/8.0)*(1 << FRAC_WIDTH);
+	static const int Constant = int((5.0/8.0)*(1 << FRAC_WIDTH));
 };
 
 //--------------------- Encoder class
@@ -159,19 +173,34 @@ public:
 	~FP_Encoder();
 	FP_Encoder(char*m, int);
 	int encode(char *, char *, int);
-	int encode(char *, int *, int);
+	int encode(char *, int);
+	//void check_codeword();
+	int getCodeword(int addr){ return Codeword[addr];};
+	int getInfoIndex(int addr){return InfoIndex[addr];};
 private:
 	int Codeword[NUM_VAR];
-	//int ChkDeg[NUM_VAR];
-	int Gdimx;
-	int Gdimy;
-	int InfoLen;
-	int Codelen;
+	//231 is the row dimension (reduced from 235). improvement: allocate dynamically
+	int ChkDeg[231]; 
+	int VarDeg[NUM_VAR];
+	//1078 is the max check deg. improvement: allocate dynamically
+	int G_mlist[231][1078];
+	int Gdim_row;
+	int Gdim_col;
+	//int InfoLen;
+	//int Codelen;
+	int check_fp(int*); // check whether the input vector pass the parity check matrix
 	class ROM CodeROM;
-	unsigned int *InfoBuffer;
-	unsigned int *ParityIndex;
-	unsigned int *InfoIndex;
-	unsigned int **GeneratorMat;
+	// hard code test
+	unsigned int ColumnFlag[NUM_VAR];
+	unsigned int InfoBuffer[INFO_LENGTH];
+	unsigned int ParityIndex[NUM_VAR - INFO_LENGTH];
+	unsigned int InfoIndex[INFO_LENGTH];
+	//unsigned int GeneratorMat[1978][231];
+	//---- need some verification
+	//unsigned int *InfoBuffer;
+	//unsigned int *ParityIndex;
+	//unsigned int *InfoIndex;
+	//unsigned int **GeneratorMat;
 };
 
 
@@ -197,6 +226,11 @@ inline int FP_Decoder::fmin(int x, int y){
 		return y;
 }
 
-
+inline int FP_Decoder::fmax(int x, int y){		
+	if(x >= y)
+		return x;
+	else
+		return y;
+}
 #endif
 

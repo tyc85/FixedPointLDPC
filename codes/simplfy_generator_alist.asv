@@ -49,25 +49,32 @@ end
 vlist = zeros(n, max(vdeg));
 clist = zeros(m, max(cdeg));
 
-G_Trim = zeros(n - m, m);
+
 for i=1:p^2
 	for j = 1:vdeg(i)
 		vlist(i, j) = all(counter);
 		counter = counter + 1;
 	end
 end
-% vlist is the columns in the generator matrix that corresponds to parities
-% the element in vlist is the row index where the entry is non-zero
-for i = 1:numel(indx_par)
-	indx = indx_par(i);
-	for j = 1:vdeg(indx)
-		G_Trim(i, vlist(indx, j)) = 1;
+
+for i=1:p*r
+	for j = 1:cdeg(i)
+		clist(i, j) = all(counter);
+		counter = counter + 1;
 	end
 end
+% vlist is the columns in the generator matrix that corresponds to parities
+% the element in vlist is the row index where the entry is non-zero
+% for i = 1:numel(indx_par)
+% 	indx = indx_par(i);
+% 	for j = 1:vdeg(indx)
+% 		G_Trim(i, vlist(indx, j)) = 1;
+% 	end
+% end
 % need to interleave the parity into right order 
 fclose(FID);
 %%
-FID_out = fopen('H_array_p47_r5g_bin.txt', 'w');
+FID_out = fopen('G_array_p47_r5.txt', 'w');
 
 fprintf(FID_out, '%d %d', n-m, m);%  # of information bits and # of parities
 fprintf(FID_out, '\n');
@@ -86,8 +93,8 @@ for i = 1: numel(indx_par)
 end
 fprintf(FID_out, '\n');
 
-for i=1:n-m
-	for j = 1:m
+for i=1:m
+	for j = 1:cdeg(i)
 		fprintf(FID_out, '%d ', G_Trim(i, j));
 	end
 	fprintf(FID_out, '\n');
