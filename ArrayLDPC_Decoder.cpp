@@ -14,15 +14,257 @@ using namespace std;
 // 1. don't really need the posterior stored. just the hard decision would be enough
 // 
 //---------------------------
-
-
-//-------------- Encoder part starts
-
-
+//---- new part
+// new version that outputs character stream
+int FP_Decoder::decode(const int *LLR, unsigned char out*)
+{
+	int i, j;
+	// !!!! Assuming out is all zero?
+	decode_fixpoint(LLR);
+	for(i = 0; i < 276; i++)
+	{
+		
+		// NOTE: this should solve the problem where out might not be null
+		// since DecodedCodeword is either 0 or 1, erasing all other bits
+		j = 0;
+		out[i] = DecodedCodeword[i*8 + j];
+		for(j = 1; j < 8; j++)
+		{
+			out[i] = out[i] + (DecodedCodeword[i*8 + j] << j);
+		}
+	}
+	i = 277;
+	j = 0;
+	out[i] = DecodedCodeword[i*8 + j];
+	for(j = 1; j < 2209 % 8; j++)
+	{
+		out[i] = out[i] + (DecodedCodeword[i*8 + j] << j);
+	}
+}
 
 
 //-------------- Decoder part starts
-//---- new part
+int FP_Decoder::decode_fixpoint(const int *LLR)
+{
+	int Iteration; 
+	int i, j, k;
+	//---- 
+	int var_add, chk_add, cir_shift;
+	int temp;
+	//---- 
+	static int VarAddr;
+	static int ChkAddr;
+	static int Shift;
+	static int Accum[CIR_SIZE];
+	static int BankSelect;
+	static int Reg_v2c_pre[CIR_SIZE][CHK_DEG];
+	static int Reg_c2v[CIR_SIZE][CHK_DEG];
+	static int Reg_c2v_pre[CIR_SIZE][VAR_DEG]; // actually don't need pre?
+	//static int Reg_v2c[CHK_DEG];
+	static int Forward[CIR_SIZE][CHK_DEG];
+	static int Backward[CIR_SIZE][CHK_DEG];
+
+
+	if(!hardDecision(LLR)) 
+	{
+		//resetBER();
+		//calculateBER();
+		//cout << "check sum pass before decoding (continue to decode anyway)" << endl;
+		//return BitError;
+		return 0;
+	}
+	//else
+	//{
+	//	resetBER();
+	//	calculateBER();
+	//	cout << BitError << " bit errors before decoding start" << endl;
+	//}
+	
+	/*----
+	The BRCM is check oriented. The memory address specity which check it is, 
+	E.g. EdgeRAM[i].setAddress(j) specity the ith edge of the jth check node. 
+	-----*/
+	if(FSM.getState() == PCV) // prepare channel value state is on
+	{
+		// this is a totally rewritted code
+		// writing channel value to each edge that connects with the each vnode
+		for(i = 0; i < NUM_CGRP; i++) // go through all groups of cnode
+		{
+			for(k = 0; k < CIR_SIZE; k++) // for each cnode in each cgroup
+			{
+				//-- Parallel Process: writing one elem to each bank
+				for(j = 0; j < CHK_DEG; j++)	
+				{
+					//-- debug
+					Shift = CodeROM.getCirShift(i, j);
+					ChkAddr = k + i*CIR_SIZE;
+					VarAddr = (k + Shift) % CIR_SIZE + j*CIR_SIZE;// if bug verify this address
+					BankSelect = j; //simply which vgroup we are at
+					EdgeRAM[BankSelect].setAddress(ChkAddr);	
+					EdgeRAM[BankSelect].wrtData(LLR[VarAddr]);
+					//-- debug end
+				}
+			}
+		}
+		FSM.setState(C2V);	// go to check to variable state
+	}
+
+	Iteration = 0;
+	while(Iteration < MAX_ITER && FSM.getState() == C2V)
+	{
+		//-- Process one check group at a time. 
+		for(i = 0; i < NUM_CGRP; i++)
+		{
+			//-- CIR_SIZE banks of RAM and serially retrieve CHK_DEG messages from the memory
+			for(j = 0; j < CIR_SIZE; j++)
+			{
+				//-- Check node parallel process denoted in for loop 
+				//-- (loop through all check nodes in one group)
+				for(k = 0; k < CHK_DEG; k++)		
+				{
+					//-- Prepare all the V2C message
+					//Shift = CodeROM.getCirShift(k, i);
+					ChkAddr = j + i*CIR_SIZE;
+					//VarAddr = (k + Shift) % CIR_SIZE + j*CIR_SIZE;
+					BankSelect = k;
+					EdgeRAM[BankSelect].setAddress(ChkAddr); 
+					Reg_v2c_pre[j][k] = EdgeRAM[BankSelect].rdData();	
+				}
+			}
+			//-- Do binary operation of the sxor: forward backward computation
+			for(j = 0; j < CIR_SIZE; j++)	//-- Parallel process
+			{
+				Forward[j][0] = Reg_v2c_pre[j][0];
+				Backward[j][CHK_DEG-1] = Reg_v2c_pre[j][CHK_DEG-1];
+			}
+			//-- keeping this part as it is...
+			for(k = 1; k < CHK_DEG-1; k++) //-- Serial process?
+			{
+				for(j = 0; j < CIR_SIZE; j++)	//-- Parallel process?
+				{
+					Forward[j][k] = sxor(Forward[j][k-1], Reg_v2c_pre[j][k]);
+					Backward[j][CHK_DEG - k - 1] 
+					= sxor(Backward[j][CHK_DEG - k], Reg_v2c_pre[j][CHK_DEG - 1 - k]);
+				}
+			}
+			//-- Compute MC2V and accumulate the posteriori:
+			//-- NOTE: can ignore the buffer Reg_c2v in software
+			//-- 1. Compute the first and last MC2V and write back to RAM
+			for(j = 0; j < CIR_SIZE; j++)	//-- Parallel process
+			{
+				k = 0; // 1st
+				Reg_c2v[j][k] = Backward[j][k+1];
+				ChkAddr = j + i*CIR_SIZE;
+				BankSelect = k;
+				EdgeRAM[BankSelect].setAddress(ChkAddr); 
+				EdgeRAM[BankSelect].wrtData(Reg_c2v[j][k]);
+
+				//Reg_c2v[CHK_DEG-1] = Forward[CHK_DEG-1];
+				k = CHK_DEG-1; // last
+				Reg_c2v[j][k] = Forward[j][k-1];
+				ChkAddr = j + i*CIR_SIZE;
+				BankSelect = k;
+				EdgeRAM[BankSelect].setAddress(ChkAddr); 
+				EdgeRAM[BankSelect].wrtData(Reg_c2v[j][k]);
+			}
+			//-- 2. Compute rest of the MC2V message and write back to the RAM
+			for(k = 1; k < CHK_DEG-1; k++)
+			{							
+				for(j = 0; j < CIR_SIZE; j++) //-- Parallel process
+				{
+					Reg_c2v[j][k] = sxor(Forward[j][k-1], Backward[j][k+1]);
+					//VarAddr = k + i*CHK_DEG;
+					//EdgeRAM[j].setAddress(VarAddr); 
+					//EdgeRAM[j].wrtData(Reg_c2v[j][k]);
+					ChkAddr = j + i*CIR_SIZE;
+					BankSelect = k;
+					EdgeRAM[BankSelect].setAddress(ChkAddr); 
+					EdgeRAM[BankSelect].wrtData(Reg_c2v[j][k]);
+				}
+			}
+		}
+
+
+		FSM.setState(V2C);
+		//-- Check node group process complete
+
+		//-- Prepare MC2V and compute the posteriori and new MV2C
+		//if(FSM.getState() == V2C)	
+		for(i = 0; i < NUM_VGRP; i++)
+		{
+			for(j = 0; j < CIR_SIZE; j++)//-- Parallel process
+			{
+				Accum[j] = 0;
+			}
+			for(k = 0; k < VAR_DEG; k++)	//-- Serially accumulate
+			{
+				// Accumulate all the MC2V message
+				for(j = 0; j < CIR_SIZE; j++)	//-- Parallel process
+				{
+					VarAddr = i*CIR_SIZE + j;
+					Shift = CodeROM.getCirShift(k, i);
+					//Select which bank of RAM is active
+					BankSelect = i;  // vgroup index 	
+					//  need to deduce ChkAddr here: the right shift is upshift => minus
+					temp = j - Shift;
+					if(temp < 0)
+						temp += CIR_SIZE;
+					//The Address within the selected bank of RAM
+					ChkAddr = temp + k*CIR_SIZE;	
+					EdgeRAM[BankSelect].setAddress(ChkAddr);	
+					Reg_c2v_pre[j][k] = EdgeRAM[BankSelect].rdData();
+					Accum[j] = Accum[j] + Reg_c2v_pre[j][k];
+				}
+			}
+			for(j = 0; j < CIR_SIZE; j++)	//-- Parallel process
+			{
+				VarAddr = i*CIR_SIZE + j;
+				// Add in the channel value (fixed point)
+				Accum[j] = Accum[j] + LLR[VarAddr];
+				// Update the Posteriori
+				wrtPost(VarAddr, Accum[j]);
+			}
+				
+			for(k = 0; k < VAR_DEG; k++) //-- Write back to RAM the MV2C (serial)
+			{
+				for(j = 0; j < CIR_SIZE; j++) //-- Parallel process
+				{
+					Shift = CodeROM.getCirShift(k, i);
+					BankSelect = i; // the vgroup index is the BankSelect
+					//  need to deduce ChkAddr here
+					temp = j - Shift;
+					if(temp < 0)
+						temp += CIR_SIZE;
+					//The Address within the selected bank of RAM
+					ChkAddr = temp + k*CIR_SIZE;	
+					EdgeRAM[BankSelect].setAddress(ChkAddr);	
+					EdgeRAM[BankSelect].wrtData(Accum[j] - Reg_c2v_pre[j][k]);
+				}
+			}
+		}
+		Iteration++;
+		// If there is no error then break (cannot detect codeword error)
+		if(!checkPost_fp())
+		{
+			//cout << "check sum of decoder output pass at iteration "
+			//	  << Iteration << endl;
+			FSM.setState(IDLE);
+		}
+		else
+		{
+			FSM.setState(C2V);
+			//-- for debugging
+			//resetBER();
+			//calculateBER();
+			//cout << BitError << " bit errors in iteration " << Iteration << endl;
+		}
+	}// While Iteration loop end
+	//checkPost_fp();
+	// return total number of iterations
+	return Iteration;
+}
+
+
 //---- only for performance test, set the information bits to calculate BER
 void FP_Decoder::setInfoBit(char* in, int in_len)
 {
@@ -141,6 +383,7 @@ int FP_Decoder::hardDecision(const int *in)
 	}
 	return 0;
 }
+//---- use posterior to determined decoded codeword and perform check sum
 int FP_Decoder::checkPost_fp()
 {
 	int i, j, k;
@@ -148,19 +391,6 @@ int FP_Decoder::checkPost_fp()
 	int shift;
 	unsigned int varaddr;
 	unsigned int checksum = 0, checksumtemp = 0;
-	//BitError = 0;
-	//double temp = 0;
-	// simple check
-	//for(i = 0; i < NUM_VAR; i++)
-	//{
-	//	temp = getPost(i);
-	//	if(getPost_fp(i) < 0)
-	//		BitError++;
-	//}
-	//if(BitError != 0)
-	//	return 1;
-	//else
-	//	return 0;
 
 	// full check
 	for(i = 0; i < CWD_LENGTH; i++)
@@ -188,224 +418,6 @@ int FP_Decoder::checkPost_fp()
 	return 0; // check sum pass
 }
 
-int FP_Decoder::decode_fixpoint(const int *LLR)
-{
-	int Iteration; 
-	int i, j, k;
-	//---- 
-	int var_add, chk_add, cir_shift;
-	int temp;
-	//---- 
-	static int VarAddr;
-	static int ChkAddr;
-	static int Shift;
-	static int Accum[CIR_SIZE];
-	static int BankSelect;
-	static int Reg_v2c_pre[CIR_SIZE][CHK_DEG];
-	static int Reg_c2v[CIR_SIZE][CHK_DEG];
-	static int Reg_c2v_pre[CIR_SIZE][VAR_DEG]; // actually don't need pre?
-	//static int Reg_v2c[CHK_DEG];
-	static int Forward[CIR_SIZE][CHK_DEG];
-	static int Backward[CIR_SIZE][CHK_DEG];
-
-
-	if(!hardDecision(LLR)) 
-	{
-		//resetBER();
-		//calculateBER();
-		//cout << "check sum pass before decoding (continue to decode anyway)" << endl;
-		//return BitError;
-		return 0;
-	}
-	//else
-	//{
-	//	resetBER();
-	//	calculateBER();
-	//	cout << BitError << " bit errors before decoding start" << endl;
-	//}
-	
-	/*----
-	The BRCM is check oriented. The memory address specity which check it is, 
-	E.g. EdgeRAM[i].setAddress(j) specity the ith edge of the jth check node. 
-	-----*/
-	if(FSM.getState() == PCV) // prepare channel value state is on
-	{
-		// this is a totally rewritted code
-		// writing channel value to each edge that connects with the each vnode
-		for(i = 0; i < NUM_CGRP; i++) // go through all groups of cnode
-		{
-			for(k = 0; k < CIR_SIZE; k++) // for each cnode in each cgroup
-			{
-				//-- Parallel Process: writing one elem to each bank
-				for(j = 0; j < CHK_DEG; j++)	
-				{
-					//-- debug
-					Shift = CodeROM.getCirShift(i, j);
-					ChkAddr = k + i*CIR_SIZE;
-					VarAddr = (k + Shift) % CIR_SIZE + j*CIR_SIZE;// if bug verify this address
-					BankSelect = j; //simply which vgroup we are at
-					EdgeRAM[BankSelect].setAddress(ChkAddr);	
-					EdgeRAM[BankSelect].wrtData(LLR[VarAddr]);
-					//-- debug end
-				}
-			}
-		}
-		FSM.setState(C2V);	// go to check to variable state
-	}
-
-	Iteration = 0;
-	while(Iteration < MAX_ITER && FSM.getState() == C2V)
-	{
-		//-- Process one check group at a time. 
-		for(i = 0; i < NUM_CGRP; i++)
-		{
-			//-- CIR_SIZE banks of RAM and serially retrieve CHK_DEG messages from the memory
-			for(j = 0; j < CIR_SIZE; j++)
-			{
-				//-- Check node parallel process denoted in for loop 
-				//-- (loop through all check nodes in one group)
-				for(k = 0; k < CHK_DEG; k++)		
-				{
-					//-- Prepare all the V2C message
-					//Shift = CodeROM.getCirShift(k, i);
-					ChkAddr = j + i*CIR_SIZE;
-					//VarAddr = (k + Shift) % CIR_SIZE + j*CIR_SIZE;
-					BankSelect = k;
-					EdgeRAM[BankSelect].setAddress(ChkAddr); 
-					Reg_v2c_pre[j][k] = EdgeRAM[BankSelect].rdData();	
-				}
-			}
-			//-- Do binary operation of the sxor: forward backward computation
-			for(j = 0; j < CIR_SIZE; j++)	//-- Parallel process
-			{
-				Forward[j][0] = Reg_v2c_pre[j][0];
-				Backward[j][CHK_DEG-1] = Reg_v2c_pre[j][CHK_DEG-1];
-			}
-			//-- keeping this part as it is...
-			for(k = 1; k < CHK_DEG-1; k++) //-- Serial process?
-			{
-				for(j = 0; j < CIR_SIZE; j++)	//-- Parallel process?
-				{
-					Forward[j][k] = sxor(Forward[j][k-1], Reg_v2c_pre[j][k]);
-					Backward[j][CHK_DEG - k - 1] 
-					= sxor(Backward[j][CHK_DEG - k], Reg_v2c_pre[j][CHK_DEG - 1 - k]);
-				}
-			}
-			////-- Compute MC2V and accumulate the posteriori:
-			//-- 1. Compute the first and last MC2V and write back to RAM
-			for(j = 0; j < CIR_SIZE; j++)	//-- Parallel process
-			{
-				k = 0; // 1st
-				Reg_c2v[j][k] = Backward[j][k+1];
-				ChkAddr = j + i*CIR_SIZE;
-				BankSelect = k;
-				EdgeRAM[BankSelect].setAddress(ChkAddr); 
-				EdgeRAM[BankSelect].wrtData(Reg_c2v[j][k]);
-
-				//Reg_c2v[CHK_DEG-1] = Forward[CHK_DEG-1];
-				k = CHK_DEG-1; // last
-				Reg_c2v[j][k] = Forward[j][k-1];
-				ChkAddr = j + i*CIR_SIZE;
-				BankSelect = k;
-				EdgeRAM[BankSelect].setAddress(ChkAddr); 
-				EdgeRAM[BankSelect].wrtData(Reg_c2v[j][k]);
-			}
-			//-- 2. Compute rest of the MC2V message and write back to the RAM
-			for(k = 1; k < CHK_DEG-1; k++)
-			{							
-				for(j = 0; j < CIR_SIZE; j++) //-- Parallel process
-				{
-					Reg_c2v[j][k] = sxor(Forward[j][k-1], Backward[j][k+1]);
-					//VarAddr = k + i*CHK_DEG;
-					//EdgeRAM[j].setAddress(VarAddr); 
-					//EdgeRAM[j].wrtData(Reg_c2v[j][k]);
-					ChkAddr = j + i*CIR_SIZE;
-					BankSelect = k;
-					EdgeRAM[BankSelect].setAddress(ChkAddr); 
-					EdgeRAM[BankSelect].wrtData(Reg_c2v[j][k]);
-				}
-			}
-		}
-
-
-		FSM.setState(V2C);
-		//-- Check node group process complete
-
-		//-- Prepare MC2V and compute the posteriori and new MV2C
-		//if(FSM.getState() == V2C)	
-		for(i = 0; i < NUM_VGRP; i++)
-		{
-			for(j = 0; j < CIR_SIZE; j++)//-- Parallel process
-			{
-				Accum[j] = 0;
-			}
-			for(k = 0; k < VAR_DEG; k++)	//-- Serially accumulate
-			{
-				// Accumulate all the MC2V message
-				for(j = 0; j < CIR_SIZE; j++)	//-- Parallel process
-				{
-					VarAddr = i*CIR_SIZE + j;
-					Shift = CodeROM.getCirShift(k, i);
-					//Select which bank of RAM is active
-					BankSelect = i;  // vgroup index 	
-					//  need to deduce ChkAddr here: the right shift is upshift => minus
-					temp = j - Shift;
-					if(temp < 0)
-						temp += CIR_SIZE;
-					//The Address within the selected bank of RAM
-					ChkAddr = temp + k*CIR_SIZE;	
-					EdgeRAM[BankSelect].setAddress(ChkAddr);	
-					Reg_c2v_pre[j][k] = EdgeRAM[BankSelect].rdData();
-					Accum[j] = Accum[j] + Reg_c2v_pre[j][k];
-				}
-			}
-			for(j = 0; j < CIR_SIZE; j++)	//-- Parallel process
-			{
-				VarAddr = i*CIR_SIZE + j;
-				// Add in the channel value (fixed point)
-				Accum[j] = Accum[j] + LLR[VarAddr];
-				// Update the Posteriori
-				wrtPost(VarAddr, Accum[j]);
-			}
-				
-			for(k = 0; k < VAR_DEG; k++) //-- Write back to RAM the MV2C (serial)
-			{
-				for(j = 0; j < CIR_SIZE; j++) //-- Parallel process
-				{
-					Shift = CodeROM.getCirShift(k, i);
-					BankSelect = i; // the vgroup index is the BankSelect
-					//  need to deduce ChkAddr here
-					temp = j - Shift;
-					if(temp < 0)
-						temp += CIR_SIZE;
-					//The Address within the selected bank of RAM
-					ChkAddr = temp + k*CIR_SIZE;	
-					EdgeRAM[BankSelect].setAddress(ChkAddr);	
-					EdgeRAM[BankSelect].wrtData(Accum[j] - Reg_c2v_pre[j][k]);
-				}
-			}
-		}
-		Iteration++;
-		// If there is no error then break (cannot detect codeword error)
-		if(!checkPost_fp())
-		{
-			//cout << "check sum of decoder output pass at iteration "
-			//	  << Iteration << endl;
-			FSM.setState(IDLE);
-		}
-		else
-		{
-			FSM.setState(C2V);
-			//-- for debugging
-			//resetBER();
-			//calculateBER();
-			//cout << BitError << " bit errors in iteration " << Iteration << endl;
-		}
-	}// While Iteration loop end
-	//checkPost_fp();
-	// return total number of iterations
-	return Iteration;
-}
 
 // for debugging use, just in case we need it. 
 void ReadH()
@@ -501,6 +513,7 @@ double FP_Decoder::sxor(double x, double y){
 }
 
 
+/// error version...
 int FP_Decoder::decode(const double *LLR)
 {
 	//int Counter; 

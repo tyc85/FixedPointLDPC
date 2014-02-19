@@ -1,8 +1,6 @@
-#ifndef ARRAY_MACRO_H
-#define ARRAY_MACRO_H
+#ifndef PRE_CODE_MACRO_H
+#define PRE_CODE_MACRO_H
 
-
-#include <fstream>
 #include <iostream>
 #include <math.h>
 //---------- Shared constants
@@ -14,25 +12,21 @@
 //#define CIRCULANT_SIZE 32
 
 using namespace std;
-enum Simulation {MAX_ITER = 5, NUM_PEEK = 1000000, SEED = 100};
-//enum CodeWifi {
-//		NUM_VAR = 1944, NUM_CHK = 972, NUM_CGRP = 12, VAR_DEG = 24,
-//		P = 81, CIR_SIZE = 81, INFO_LENGTH = 1978, CWD_LENGTH = 1944};
-
+enum Simulation {MAX_ITER = 10, NUM_PEEK = 1000000, SEED = 100};
 enum Code {
 		NUM_VAR = 2209, NUM_CHK = 235, NUM_CGRP = 5, VAR_DEG = 5, NUM_VGRP = 47, 
 		CHK_DEG = 47, P = 47, CIR_SIZE = 47, INFO_LENGTH = 1978, CWD_LENGTH = 2209};
 enum RAM_Const {
 		RAM_WIDTH = 32, RAM_SLICE = 8, RAM_DEPTH = CHK_DEG*VAR_DEG};
 enum Precision {
-		WIDTH_MASK = 0x000000ff, //8 bit mask
-		SIGN_MASK = 0x00000080, //not really used yet, the 8th bit mask
+		WIDTH_MASK = 0x000000ff, 
+		SIGN_MASK = 0x00000080, 
 		/*INT_WIDTH = 4, 
 		FRAC_WIDTH = 3, 
 		INT_WIDTH_NOISE = 4, 
 		FRAC_WIDTH_NOISE = 12*/
-		INT_WIDTH = 4, 
-		FRAC_WIDTH = 3, 
+		INT_WIDTH = 2, 
+		FRAC_WIDTH = 4, 
 		INT_WIDTH_NOISE = 4, 
 		FRAC_WIDTH_NOISE = 6
 };
@@ -57,8 +51,8 @@ public:
 			}
 		}
 		CodeRate = 1 - double(NUM_CGRP*CirSize -NUM_CGRP+1)/(CirSize*CirSize);
-		//cout <<"Array code with circulant size "  << P <<", blocklength " 
-		//	  << NUM_VAR << ", code rate " << getRate() << endl;
+		cout <<"Array code with circulant size "  << P <<", blocklength " 
+			  << NUM_VAR << ", code rate " << getRate() << endl;
 	};
 	//~ROM();
 	double getRate(){ return CodeRate; };
@@ -79,8 +73,6 @@ private:
 	int NumChk;
 	double CodeRate;
 };
-
-//!!!!! remember to remove the double type BRAM
 class Memory
 {
 public:
@@ -116,34 +108,24 @@ private:
 	int CurState;
 };
 
-
 class FP_Decoder
 {
 public:
-	
+	int InfoBit[INFO_LENGTH];
 	int decode_fixpoint(const int *LLR);
 	int decode(const double *LLR);
-	int decode(const int *LLR, unsigned char out*);
 	int sgn(double);
 	int sgn(int);
 	int sxor(int, int);
-	int fmin(int, int);
-	int fmax(int, int);
-	int check();
-	int check_fp(int*); // check whether the input vector pass the parity check matrix
+	int min(int, int);
+	int max(int, int);
 	int checkPost();
 	int checkPost_fp();
 	int getPost_fp(int Addr){ return Posteriori_fp[Addr]; };
 	int getState(){ return FSM.getState();  };
 	void setState(int in){ FSM.setState(in);  };
-	void setInfoBit(char*, int);
-	void setInfoIndex(int *);
-	void setCodeword(int *);
-	int hardDecision(const int *);  // perform hardecision o input and verfiy check sum
-	int calculateBER();
-	void resetBER(){ BitError = 0;};
 
-	double fmin(double, double);
+	double min(double, double);
 	double getPost(int Addr){ return Posteriori[Addr]; };
 	double getRate(){ return CodeROM.getRate(); };
 	double sxor(double, double);
@@ -155,56 +137,28 @@ private:
 	class ROM CodeROM;
 	class ControlFSM FSM;
 	class Memory EdgeRAM[CIR_SIZE];
-	int DecodedCodeword[CWD_LENGTH];
-	int TrueCodeword[CWD_LENGTH];
-	int TrueInfoBit[INFO_LENGTH];
-	int InfoIndex[INFO_LENGTH];
 	int Posteriori_fp[CWD_LENGTH];
 	double Posteriori[CWD_LENGTH];
 	int BitError;
-	// shifting a fixed point fractional numbers to a binary representation
-	static const int Constant = int((5.0/8.0)*(1 << FRAC_WIDTH));
+	static const int Constant = (5.0/8.0)*(1 << FRAC_WIDTH);
 };
 
-//--------------------- Encoder class
-class FP_Encoder
+inline int FP_Decoder::checkPost_fp()
 {
-public:
-	FP_Encoder();
-	~FP_Encoder();
-	FP_Encoder(char*m, int);
-	//--- should change to unsigned char
-	int encode(char *, char *, int);
-	int encode(char *, int);
-	//void check_codeword();
-	int getCodeword(int addr){ return Codeword[addr];};
-	int getInfoIndex(int addr){return InfoIndex[addr];};
-private:
-	int Codeword[NUM_VAR];
-	//231 is the row dimension (reduced from 235). improvement: allocate dynamically
-	int ChkDeg[231]; 
-	int VarDeg[NUM_VAR];
-	//1078 is the max check deg. improvement: allocate dynamically
-	int G_mlist[231][1078];
-	int Gdim_row;
-	int Gdim_col;
-	//int InfoLen;
-	//int Codelen;
-	int check_fp(int*); // check whether the input vector pass the parity check matrix
-	class ROM CodeROM;
-	// hard code test
-	unsigned int ColumnFlag[NUM_VAR];
-	unsigned int InfoBuffer[INFO_LENGTH];
-	unsigned int ParityIndex[NUM_VAR - INFO_LENGTH];
-	unsigned int InfoIndex[INFO_LENGTH];
-	//unsigned int GeneratorMat[1978][231];
-	//---- need some verification
-	//unsigned int *InfoBuffer;
-	//unsigned int *ParityIndex;
-	//unsigned int *InfoIndex;
-	//unsigned int **GeneratorMat;
-};
-
+	int i = 0;
+	BitError = 0;
+	double temp = 0;
+	for(i = 0; i < CWD_LENGTH; i++)
+	{
+		temp = getPost(i);
+		if(getPost_fp(i) < 0)
+			BitError++;
+	}
+	if(BitError != 0)
+		return 1;
+	else
+		return 0;
+}
 
 
 inline int FP_Decoder::sgn(double x){
@@ -215,24 +169,19 @@ inline int FP_Decoder::sgn(int x){
 	return (x > 0)?1:-1;
 }
 
-inline double FP_Decoder::fmin(double x, double y){		
+inline double FP_Decoder::min(double x, double y){		
 	if(x <= y)
 		return x;
 	else
 		return y;
 }
-inline int FP_Decoder::fmin(int x, int y){		
+inline int FP_Decoder::min(int x, int y){		
 	if(x <= y)
 		return x;
 	else
 		return y;
 }
 
-inline int FP_Decoder::fmax(int x, int y){		
-	if(x >= y)
-		return x;
-	else
-		return y;
-}
+
 #endif
 

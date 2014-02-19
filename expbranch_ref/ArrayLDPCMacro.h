@@ -123,7 +123,6 @@ public:
 	
 	int decode_fixpoint(const int *LLR);
 	int decode(const double *LLR);
-	int decode(const int *LLR, unsigned char out*);
 	int sgn(double);
 	int sgn(int);
 	int sxor(int, int);
@@ -173,7 +172,6 @@ public:
 	FP_Encoder();
 	~FP_Encoder();
 	FP_Encoder(char*m, int);
-	//--- should change to unsigned char
 	int encode(char *, char *, int);
 	int encode(char *, int);
 	//void check_codeword();
