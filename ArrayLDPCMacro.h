@@ -14,16 +14,17 @@
 //#define CIRCULANT_SIZE 32
 
 using namespace std;
-enum Simulation {MAX_ITER = 5, NUM_PEEK = 1000000, SEED = 100};
-//enum CodeWifi {
-//		NUM_VAR = 1944, NUM_CHK = 972, NUM_CGRP = 12, VAR_DEG = 24,
-//		P = 81, CIR_SIZE = 81, INFO_LENGTH = 1978, CWD_LENGTH = 1944};
+enum Simulation {MAX_ITER = 30, NUM_PEEK = 1000000, SEED = 100};
+enum CodeWifi {
+		NUM_VAR = 1944, NUM_CHK = 972, NUM_CGRP = 12, NUM_VGRP = 24, CHK_DEG = 8, VAR_DEG = 11,
+		P = 81, CIR_SIZE = 81, INFO_LENGTH = 972, CWD_LENGTH = 1944};
 
-enum Code {
-		NUM_VAR = 2209, NUM_CHK = 235, NUM_CGRP = 5, VAR_DEG = 5, NUM_VGRP = 47, 
-		CHK_DEG = 47, P = 47, CIR_SIZE = 47, INFO_LENGTH = 1978, CWD_LENGTH = 2209};
+//enum Code {
+//		NUM_VAR = 2209, NUM_CHK = 235, NUM_CGRP = 5, VAR_DEG = 5, NUM_VGRP = 47, 
+//		CHK_DEG = 47, P = 47, CIR_SIZE = 47, INFO_LENGTH = 1978, CWD_LENGTH = 2209};
+
 enum RAM_Const {
-		RAM_WIDTH = 32, RAM_SLICE = 8, RAM_DEPTH = CHK_DEG*VAR_DEG};
+		RAM_WIDTH = 32, RAM_SLICE = 8, RAM_DEPTH = NUM_CGRP*CIR_SIZE};
 enum Precision {
 		WIDTH_MASK = 0x000000ff, //8 bit mask
 		SIGN_MASK = 0x00000080, //not really used yet, the 8th bit mask
@@ -122,7 +123,7 @@ class FP_Decoder
 public:
 	
 	int decode_fixpoint(const int *LLR);
-	int decode(const double *LLR);
+	int decode(const double *LLR);  // use this for wifi code, test floating point first
 	int sgn(double);
 	int sgn(int);
 	int sxor(int, int);
@@ -144,16 +145,19 @@ public:
 
 	double fmin(double, double);
 	double getPost(int Addr){ return Posteriori[Addr]; };
-	double getRate(){ return CodeROM.getRate(); };
+	double getRate(){ return CodeROM.getRate(); };  // don't use get rate for wifi code
 	double sxor(double, double);
 	void wrtPost(int Addr, int in){ Posteriori_fp[Addr] = in;};
 	void wrtPost(int Addr, double in){ Posteriori[Addr] = in;};
-
+	//--- new
+	//void setShorten(int);
+	//int getInfoIndex(int addr){ return InfoIndex[i];}
 	//const int* getPostBlk() {return Posteriori;};
+	void ReadH();
 private:
 	class ROM CodeROM;
 	class ControlFSM FSM;
-	class Memory EdgeRAM[CIR_SIZE];
+	class Memory EdgeRAM[CHK_DEG]; //=> can be improved for irregular code
 	int DecodedCodeword[CWD_LENGTH];
 	int TrueCodeword[CWD_LENGTH];
 	int TrueInfoBit[INFO_LENGTH];
@@ -161,6 +165,10 @@ private:
 	int Posteriori_fp[CWD_LENGTH];
 	double Posteriori[CWD_LENGTH];
 	int BitError;
+	//  FOR WIFI code
+	int vnum, cnum, vdeg_max, cdeg_max;
+	int vdeg[CWD_LENGTH], cdeg[INFO_LENGTH], vlist[CWD_LENGTH][VAR_DEG], clist[INFO_LENGTH][CHK_DEG];
+
 	// shifting a fixed point fractional numbers to a binary representation
 	static const int Constant = int((5.0/8.0)*(1 << FRAC_WIDTH));
 };

@@ -1,5 +1,6 @@
 p = 47;
 r = 5;
+rate = 1 - (r*p - r + 1)/p^2
 I = eye(p);
 % shift backward
 % S = circshift(I,1);
@@ -36,6 +37,8 @@ for i = 1:p*r
 end
 
 fprintf(FID, '\n');
+
+% output columns
 for i=1:p^2
 	ind = find(H(:, i));
 	for j = 1:r
@@ -44,6 +47,8 @@ for i=1:p^2
 	fprintf(FID, '\n');
 end
 
+
+% output rows
 for i=1:p*r
 	ind = find(H(i, :));
 	for j = 1:p

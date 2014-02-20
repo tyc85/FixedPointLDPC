@@ -28,7 +28,8 @@ int main(int argc, char *argv[])
 	}
 	else if(1) // debugging
 	{
-		ArrayLDPC_Debug();
+		//ArrayLDPC_Debug_Shorten(36);
+		ArrayLDPC_Debug_Wifi();
 		long MaxPckNum;
 		printf("argc = %d \n time trial with: manual input\n", argc);
 		cout << "EbN0 in dB: ";
@@ -43,11 +44,11 @@ int main(int argc, char *argv[])
 		//---- code timging for windows
 
 		//---- encoder trial
-		EncodeTrial(InfoStream, MaxPckNum);
+		//EncodeTrial(InfoStream, MaxPckNum);
 		//---- decoder trial
- 		DecodeTrial(EbN0, MaxPckNum);
+ 		//DecodeTrial(EbN0, MaxPckNum);
 		//---- test error rate
-		ArrayLDPC_Debug();
+		//ArrayLDPC_Debug();
 
 		
 	}
