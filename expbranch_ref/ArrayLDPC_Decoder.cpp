@@ -15,12 +15,6 @@ using namespace std;
 // 
 //---------------------------
 
-
-//-------------- Encoder part starts
-
-
-
-
 //-------------- Decoder part starts
 //---- new part
 //---- only for performance test, set the information bits to calculate BER
@@ -408,13 +402,13 @@ int FP_Decoder::decode_fixpoint(const int *LLR)
 }
 
 // for debugging use, just in case we need it. 
-void ReadH()
+void FP_Decoder::ReadH()
 {
 	int i, j;
 	//-------------- H matrix check
-	ifstream filestr("H_array_p47_r5_forward.txt");
-	int vnum, cnum, vdeg_max, cdeg_max;
-	int dummy, vdeg[2209], cdeg[235], vlist[2209][5], clist[235][47];
+	ifstream filestr("H_802.11_IndZero.txt");
+	
+	//int dummy;
 	int par_count = 0, info_count = 0;
 	filestr >> vnum;
 	filestr >> cnum;
@@ -510,31 +504,38 @@ int FP_Decoder::decode(const double *LLR)
 	int ChkAddr;
 	int Shift;
 	int Iteration = 0;
+	int BankSelect;
+	int deg;
 	double MV2C[CHK_DEG];
 	double MC2V[VAR_DEG];
 	double Forward[CHK_DEG];
 	double Backward[CHK_DEG];
 	
 	//Initialize the Edge RAM with channel values from variable node 
-	double temp;
+	//double accum[CWD_LENGTH];
+	double accum;
+	int addr_count[INFO_LENGTH]; // count the number of check vnode added for each chk
 
 	// for debugging
-	double Received[NUM_VAR];
-	for(i = 0; i < NUM_VAR; i++)
-	{
-		Received[i] = LLR[i];
-	}
-	for(i = 0; i < NUM_VGRP; i++)
+	//double Received[NUM_VAR];
+	//for(i = 0; i < NUM_VAR; i++)
+	//{
+	//	Received[i] = LLR[i];
+	//}
+	for(i = 0; i < NUM_CGRP; i++)
 	{
 		for(j = 0; j < CIR_SIZE; j++)
 		{
-			VarAddr = i*CIR_SIZE + j;
-			for(k = 0; k < VAR_DEG; k++)
+			ChkAddr = j + i*CIR_SIZE;
+			deg =  cdeg[ChkAddr];
+			for(k = 0; k < deg; k++)
 			{
 				Shift = CodeROM.getCirShift(k, i);
-				ChkAddr = (j + Shift) % CIR_SIZE;
-				EdgeRAM[k].setAddress(ChkAddr + i*CIR_SIZE);	
-				EdgeRAM[k].wrtData(LLR[VarAddr]);
+				// the kth variable node addr of current cnode
+				VarAddr = clist[ChkAddr][k];
+				BankSelect = k; //simply which vgroup we are at
+				EdgeRAM[BankSelect].setAddress(ChkAddr);	
+				EdgeRAM[BankSelect].wrtData(LLR[VarAddr]);
 				//temp = EdgeRAM[k].getData();
 			}
 		}
@@ -547,49 +548,51 @@ int FP_Decoder::decode(const double *LLR)
 			//-- Check node parallel process denoted in for loop (loop through all check nodes in one group)
 			for(j = 0; j < CIR_SIZE; j++)
 			{
-				
-				for(k = 0; k < CHK_DEG; k++)
+				ChkAddr = j + i*CIR_SIZE;
+				deg = cdeg[ChkAddr];
+				for(k = 0; k < deg; k++)
 				{
 					//This is simply for better read of the code. Not necessary.
 					//Shift = CodeROM.getCirShift(i, k);
 					//-- Prepare all the V2C message
-					//VarAddr = k*47 + Shift;
-					VarAddr = j + k*CHK_DEG;
-					EdgeRAM[i].setAddress(VarAddr); 
-					MV2C[k] = EdgeRAM[i].getData();	
+					BankSelect = k;
+					EdgeRAM[BankSelect].setAddress(ChkAddr); 
+					MV2C[k] = EdgeRAM[BankSelect].getData();	
 				}
 				//-- Do binary operation of the sxor: forward backward computation
 				Forward[0] = MV2C[0];
-				Backward[CHK_DEG-1] = MV2C[CHK_DEG-1];
-				for(k = 1; k < CHK_DEG-1; k++)
+				Backward[deg-1] = MV2C[deg-1];
+				for(k = 1; k < deg; k++)
 				{
 					Forward[k] = sxor(Forward[k-1], MV2C[k]);
-					Backward[CHK_DEG - k - 1] = sxor(Backward[CHK_DEG - k], MV2C[CHK_DEG - 1 - k]);
+					Backward[deg - k - 1] = sxor(Backward[deg - k], MV2C[deg - 1 - k]);
 				}
 				//-- make MV2C temp memory to store all the computed MC2V message from one check node
 				//-- Compute the first and last MC2V and write back to RAM
-				k = 0; // 1st
-				MV2C[k] = Backward[k+1];
-				VarAddr = j + k*CHK_DEG;
-				EdgeRAM[i].setAddress(VarAddr); 
-				EdgeRAM[i].wrtData(MV2C[k]);
+				k = 0; // 1st// a bit redundant
+				BankSelect = k;
+				MV2C[k] = Backward[k+1]; // redundant
+				//ChkAddr = j + i*CIR_SIZE; //already done
+				EdgeRAM[BankSelect].setAddress(ChkAddr); 
+				EdgeRAM[BankSelect].wrtData(MV2C[k]);
 
 				//MV2C[CHK_DEG-1] = Forward[CHK_DEG-1];
-				k = CHK_DEG-1; // last
+				k = deg-1; // last
+				BankSelect = k;
 				MV2C[k] = Forward[k-1];
-				VarAddr = j + k*CHK_DEG;
-				EdgeRAM[i].setAddress(VarAddr); 
-				EdgeRAM[i].wrtData(MV2C[k]);
+				//ChkAddr = j + i*CIR_SIZE; //already done
+				EdgeRAM[BankSelect].setAddress(ChkAddr); 
+				EdgeRAM[BankSelect].wrtData(MV2C[k]);
 				
 				//-- Compute the MV2C message and write back to the RAM
-				for(k = 1; k < CHK_DEG-1; k++)
+				for(k = 1; k < deg-1; k++)
 				{
 					MV2C[k] = sxor(Forward[k-1], Backward[k+1]);
-					VarAddr = j + k*CHK_DEG;
-					EdgeRAM[i].setAddress(VarAddr); 
-					EdgeRAM[i].wrtData(MV2C[k]);
-					if(MV2C[k] > 8)
-						cout << MV2C[k];
+					BankSelect = k;
+					EdgeRAM[BankSelect].setAddress(ChkAddr); 
+					EdgeRAM[BankSelect].wrtData(MV2C[k]);
+					//if(MV2C[k] > 8)
+					//	cout << MV2C[k];
 				}
 				
 			}
@@ -597,14 +600,59 @@ int FP_Decoder::decode(const double *LLR)
 		//-- Check node group process complete
 
 		//-- Prepare MC2V and compute the posteriori and new MV2C
+		// for irregular code this is harder, need to use chk centric
+		// computation... => doesn't work either
+		//for(i = 0; i < CWD_LENGTH; i++)
+		//	accum[i] = 0;
+		//for(i = 0; i < NUM_CGRP; i++)
+		//{
+		//	for(j = 0; j < CIR_SIZE; j++)
+		//	{
+		//		ChkAddr = i*CIR_SIZE + j;
+		//		deg = cdeg[ChkAddr];
+		//		// Accumulate all the MC2V message
+		//		for(k = 0; k < deg; k++)
+		//		{
+		//			VarAddr = clist[ChkAddr][k];
+		//			//-- old code
+		//			//Shift = CodeROM.getCirShift(k, i);
+		//			//ChkAddr = (j + Shift) % CIR_SIZE;
+		//			//EdgeRAM[k].setAddress(ChkAddr + i*CIR_SIZE);	
+		//			//MC2V[k] = EdgeRAM[k].getData();
+		//			//temp = temp + MC2V[k];
+		//			//-- new code
+		//			//Select which bank of RAM is active
+		//			BankSelect = k;  // vgroup index 
+		//			// kth cnode index for the current vnode
+		//			EdgeRAM[BankSelect].setAddress(ChkAddr);	
+		//			MC2V[k] = EdgeRAM[BankSelect].getData();
+		//			accum[VarAddr] = accum[VarAddr] + MC2V[k];
+		//		}
+		//		// Add in the channel value
+		//		accum[VarAddr] = accum[VarAddr] + LLR[VarAddr];
+		//		wrtPost(VarAddr, accum[VarAddr]);
+		//		for(k = 0; k < deg; k++)
+		//		{
+		//			//Shift = CodeROM.getCirShift(k, i);
+		//			BankSelect = k;
+		//			EdgeRAM[BankSelect].setAddress(ChkAddr);	
+		//			EdgeRAM[BankSelect].wrtData(accum[VarAddr] - MC2V[k]);
+		//			//temp = EdgeRAM[k].getData();
+		//		}
+		//	}
+		//}
+		//---- still need this part of the code...
+		for(i = 0; i < INFO_LENGTH; i++)
+			addr_count[i] = 0;
 		for(i = 0; i < NUM_VGRP; i++)
 		{
 			for(j = 0; j < CIR_SIZE; j++)
 			{
 				VarAddr = i*CIR_SIZE + j;
-				temp = 0;
+				accum = 0;
+				deg = vdeg[VarAddr];
 				// Accumulate all the MC2V message
-				for(k = 0; k < VAR_DEG; k++)
+				for(k = 0; k < deg; k++)
 				{
 					//-- old code
 					//Shift = CodeROM.getCirShift(k, i);
@@ -613,38 +661,44 @@ int FP_Decoder::decode(const double *LLR)
 					//MC2V[k] = EdgeRAM[k].getData();
 					//temp = temp + MC2V[k];
 					//-- new code
-					EdgeRAM[j].setAddress(i + k*CIR_SIZE);	
-					MC2V[k] = EdgeRAM[j].getData();
-					temp = temp + MC2V[k];
+					// kth cnode index for the current vnode
+					ChkAddr = vlist[VarAddr][k];
+					//Select which bank of RAM is active
+					BankSelect = addr_count[ChkAddr];  // vgroup index 
+					EdgeRAM[BankSelect].setAddress(ChkAddr);	
+					MC2V[k] = EdgeRAM[BankSelect].getData();
+					accum = accum + MC2V[k];
 				}
 				// Add in the channel value
-				temp = temp + LLR[VarAddr];
-				wrtPost(VarAddr, temp);
-				for(k = 0; k < VAR_DEG; k++)
+				accum = accum + LLR[VarAddr];
+				wrtPost(VarAddr, accum);
+				for(k = 0; k < deg; k++)
 				{
-					Shift = CodeROM.getCirShift(k, i);
-					ChkAddr = (j + Shift) % CIR_SIZE;
-					EdgeRAM[k].setAddress(ChkAddr + i*CIR_SIZE);	
-					EdgeRAM[k].wrtData(temp - MC2V[k]);
-					//temp = EdgeRAM[k].getData();
+					//Shift = CodeROM.getCirShift(k, i);
+					ChkAddr = vlist[VarAddr][k];
+					//Select which bank of RAM is active
+					BankSelect = addr_count[ChkAddr];  // vgroup index
+					EdgeRAM[BankSelect].setAddress(ChkAddr);	
+					EdgeRAM[BankSelect].wrtData(accum - MC2V[k]);
+					addr_count[ChkAddr]++;
 				}
 			}
 		}
 		Iteration++;
 		// If there is no error then break (cannot detect codeword error)
 		// early termination part
-		//if(!checkPost())
-		//{
-		//	return 0;
-		//}
+		if(!checkPost())
+		{
+			return Iteration;
+		}
 	}
 	//checkPost();
-	return BitError;
+	return Iteration;
 }
 /* !!!!!!!!!
 need to modify to really check the parity check matrix!!!
 not urgent yet
-*/ 
+*/ // still for all zero codeword
 int FP_Decoder::checkPost()
 {
 	int i = 0;
@@ -654,10 +708,15 @@ int FP_Decoder::checkPost()
 	{
 		//temp = getPost(i);
 		if(getPost(i) < 0)
+		{
+			DecodedCodeword[i] = 1;
 			BitError++;
+		}
+		else
+		{
+			DecodedCodeword[i] = 0;
+		}
 	}
-	if(BitError != 0)
-		return 1;
-	else
-		return 0;
+
+	return BitError;
 }
