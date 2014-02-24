@@ -52,6 +52,7 @@ FP_Encoder::FP_Encoder(char* Filename, int flag)
 			FileStr >> vdeg_max;
 			FileStr >> cdeg_max;
 			int i, j;
+			// input column flag
 			for(i = 0; i < vnum; i++)
 			{
 				 FileStr >> ColumnFlag[i];

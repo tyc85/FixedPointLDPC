@@ -188,10 +188,10 @@ public:
 private:
 	int Codeword[NUM_VAR];
 	//231 is the row dimension (reduced from 235). improvement: allocate dynamically
-	int ChkDeg[231]; 
-	int VarDeg[NUM_VAR];
+	int ChkDeg[972]; 
+	//int VarDeg[NUM_VAR];
 	//1078 is the max check deg. improvement: allocate dynamically
-	int G_mlist[231][1078];
+	int G_mlist[972][540];
 	int Gdim_row;
 	int Gdim_col;
 	//int InfoLen;

@@ -29,7 +29,8 @@ int ArrayLDPC_Debug_Wifi()
 									for a lot of characters so that we have some random bit stream that's\
 									correct";
 	//--- unused debugging varibles  
-	char InfoStream[243] = "";// all zero info, exactly 243 bytes for wifi code
+	//char InfoStream[243] = "";// all zero info, exactly 243 bytes for wifi code
+	char InfoStream[122] = "OMG  how long   dd   should this string be to make it 243";
 	//int InfoBit[INFO_LENGTH];
 	//int Codewordtemp[CWD_LENGTH];
 	//double Receive[CWD_LENGTH];
@@ -51,7 +52,7 @@ int ArrayLDPC_Debug_Wifi()
 	int info_indx[INFO_LENGTH];
 	
 	class FP_Decoder Decoder;
-	class FP_Encoder Encoder("G_array_forward.txt", 0);
+	class FP_Encoder Encoder("H_802.11_IndZerog.txt", 0);
 	
 	EbN0_dB = 3;
 	//Rate = Decoder.getRate();
@@ -70,13 +71,19 @@ int ArrayLDPC_Debug_Wifi()
 	//Encoder.encode(InfoStream, out, 248);
 	//---- 
 
-	Decoder.setInfoBit(InfoStream, 248);
+	Decoder.setInfoBit(InfoStream, 122);
+	//for(i = 0; i < INFO_LENGTH; i++)
+	//{
+	//	//info_indx[i] = Encoder.getInfoIndex(i);
+	//	// for wifi code it's systematic due to staircase structure
+	//	info_indx[i] = i;
+	//}
+	// NEED IMPROVEMENT! SHOULD BE ABLE TO HAVE SYSTEMATIC BITS
 	for(i = 0; i < INFO_LENGTH; i++)
 	{
-		//info_indx[i] = Encoder.getInfoIndex(i);
-		// for wifi code it's systematic due to staircase structure
-		info_indx[i] = i;
+		info_indx[i] = Encoder.getInfoIndex(i);
 	}
+	//Decoder.setInfoIndex(info_indx);
 	Decoder.setInfoIndex(info_indx);
 	//for(i = 0; i < CWD_LENGTH; i++)
 	//		Codewordtemp[i] = Encoder.getCodeword(i);
@@ -91,7 +98,7 @@ int ArrayLDPC_Debug_Wifi()
 		//for(i = 247; i >= 0; i--)
 		//	cout << std::bitset<8>(InfoStream[i]) << ", ";
 		//cout <<endl;
-		//Encoder.encode(InfoStream, 248);
+		Encoder.encode(InfoStream, 122);//WIFI code
 		
 		//cout << "codeword checksum:" << Decoder.check_fp(Codewordtemp) <<endl;
 		//cout << "codeword checksum: (0 is pass, 1 is not pass):" << Decoder.check_fp(Codeword)<<endl;
@@ -99,9 +106,9 @@ int ArrayLDPC_Debug_Wifi()
 		{
 			//-- BPSK modulation => 0 -> 1, 1 -> -1
 			// Using Box-Muller method to generate Gaussian noise
-			//LLR[i] = 2*snr*(1 - 2*Encoder.getCodeword(i) + Normal(0, sigma));
+			LLR[i] = 2*snr*(1 - 2*Encoder.getCodeword(i) + Normal(0, sigma));
 			// -- all zero
-			LLR[i] = 2*snr*(1 + Normal(0, sigma));
+			//LLR[i] = 2*snr*(1 + Normal(0, sigma));
 			//-- noiseless case
 			//LLR[i] = 2*snr*(1 - 2*Encoder.getCodeword(i));
 			// Using Wallace method to generate Gaussian noise
