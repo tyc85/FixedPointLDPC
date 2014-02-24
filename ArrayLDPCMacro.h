@@ -14,10 +14,10 @@
 //#define CIRCULANT_SIZE 32
 
 using namespace std;
-enum Simulation {MAX_ITER = 5, NUM_PEEK = 1000000, SEED = 100};
+enum Simulation {MAX_ITER = 15, NUM_PEEK = 1000000, SEED = 100};
 //enum CodeWifi {
-//		NUM_VAR = 1944, NUM_CHK = 972, NUM_CGRP = 12, VAR_DEG = 24,
-//		P = 81, CIR_SIZE = 81, INFO_LENGTH = 1978, CWD_LENGTH = 1944};
+//		NUM_VAR = 1944, NUM_CHK = 972, NUM_CGRP = 12, NUM_VGRP = 24, CHK_DEG = 8, VAR_DEG = 11,
+//		P = 81, CIR_SIZE = 81, INFO_LENGTH = 972, CWD_LENGTH = 1944};
 
 enum Code {
 		NUM_VAR = 2209, NUM_CHK = 235, NUM_CGRP = 5, VAR_DEG = 5, NUM_VGRP = 47, 
@@ -162,6 +162,9 @@ private:
 	int Posteriori_fp[CWD_LENGTH];
 	double Posteriori[CWD_LENGTH];
 	int BitError;
+	//  FOR WIFI code
+	int vnum, cnum, vdeg_max, cdeg_max;
+	int vdeg[CWD_LENGTH], cdeg[INFO_LENGTH], vlist[CWD_LENGTH][VAR_DEG], clist[INFO_LENGTH][CHK_DEG];
 	// shifting a fixed point fractional numbers to a binary representation
 	static const int Constant = int((5.0/8.0)*(1 << FRAC_WIDTH));
 };
