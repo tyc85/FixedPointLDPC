@@ -14,7 +14,7 @@
 //#define CIRCULANT_SIZE 32
 
 using namespace std;
-enum Simulation {MAX_ITER = 30, NUM_PEEK = 1000000, SEED = 100};
+enum Simulation {MAX_ITER = 10, NUM_PEEK = 1000000, SEED = 100};
 enum CodeWifi {
 		NUM_VAR = 1944, NUM_CHK = 972, NUM_CGRP = 12, NUM_VGRP = 24, CHK_DEG = 8, VAR_DEG = 11,
 		P = 81, CIR_SIZE = 81, INFO_LENGTH = 972, CWD_LENGTH = 1944};
@@ -123,6 +123,7 @@ class FP_Decoder
 public:
 	
 	int decode_fixpoint(const int *LLR);
+	int decode_general(const int *LLR);
 	int decode(const double *LLR);  // use this for wifi code, test floating point first
 	int sgn(double);
 	int sgn(int);
