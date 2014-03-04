@@ -30,6 +30,7 @@ int main(int argc, char *argv[])
 	{
 		//ArrayLDPC_Debug_Shorten(36);
 		ArrayLDPC_Debug_Wifi();
+		return 0;
 		long MaxPckNum;
 		printf("argc = %d \n time trial with: manual input\n", argc);
 		cout << "EbN0 in dB: ";

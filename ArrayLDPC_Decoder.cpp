@@ -14,20 +14,16 @@ using namespace std;
 // 1. don't really need the posterior stored. just the hard decision would be enough
 // 
 //---------------------------
-
-
-
-
 //-------------- fp_Decoder part for WIFI starts
-int FP_Decoder::decode_general(const int *LLR)
+int FP_Decoder::decode_general_fp(const int *LLR)
 {
 	//int Counter; 
 	static int i, j, k;
 	//int VarShift[NUM_VGRP];
 	static int VarAddr;
 	static int ChkAddr;
-	static int Shift;
-	static int Iteration = 0;
+	//static int Shift;
+	static int Iteration;
 	static int BankSelect;
 	static int deg;
 	static int MV2C[CHK_DEG];
@@ -37,7 +33,7 @@ int FP_Decoder::decode_general(const int *LLR)
 	
 	//Initialize the Edge RAM with channel values from variable node 
 	//double accum[CWD_LENGTH];
-	static double accum;
+	static int accum;
 	static int addr_count[INFO_LENGTH]; // count the number of check vnode added for each chk
 
 	// for debugging
@@ -54,16 +50,16 @@ int FP_Decoder::decode_general(const int *LLR)
 			deg =  cdeg[ChkAddr];
 			for(k = 0; k < deg; k++)
 			{
-				Shift = CodeROM.getCirShift(k, i);
+				//Shift = CodeROM.getCirShift(k, i);
 				// the kth variable node addr of current cnode
 				VarAddr = clist[ChkAddr][k];
 				BankSelect = k; //simply which vgroup we are at
 				EdgeRAM[BankSelect].setAddress(ChkAddr);	
 				EdgeRAM[BankSelect].wrtData(LLR[VarAddr]);
-				//temp = EdgeRAM[k].getData();
 			}
 		}
 	}
+	Iteration = 0;
 	while(Iteration < MAX_ITER)
 	{
 		//-- Process each check group at a time. 
@@ -81,7 +77,7 @@ int FP_Decoder::decode_general(const int *LLR)
 					//-- Prepare all the V2C message
 					BankSelect = k;
 					EdgeRAM[BankSelect].setAddress(ChkAddr); 
-					MV2C[k] = EdgeRAM[BankSelect].getData();	
+					MV2C[k] = EdgeRAM[BankSelect].rdData();	
 				}
 				//-- Do binary operation of the sxor: forward backward computation
 				Forward[0] = MV2C[0];
@@ -118,7 +114,6 @@ int FP_Decoder::decode_general(const int *LLR)
 					//if(MV2C[k] > 8)
 					//	cout << MV2C[k];
 				}
-				
 			}
 		}
 
@@ -141,7 +136,7 @@ int FP_Decoder::decode_general(const int *LLR)
 					//Select which bank of RAM is active
 					BankSelect = addr_count[ChkAddr];  // vgroup index 
 					EdgeRAM[BankSelect].setAddress(ChkAddr);	
-					MC2V[k] = EdgeRAM[BankSelect].getData();
+					MC2V[k] = EdgeRAM[BankSelect].rdData();
 					accum = accum + MC2V[k];
 				}
 				// Add in the channel value
@@ -162,7 +157,11 @@ int FP_Decoder::decode_general(const int *LLR)
 		Iteration++;
 		// If there is no error then break (cannot detect codeword error)
 		// early termination part
-		if(!checkPost_fp())
+		//if(!checkPost()) //check all zero codewrods
+		//{
+		//	return Iteration;
+		//}
+		if(!checkPost_fp_general())
 		{
 			return Iteration;
 		}
@@ -293,6 +292,86 @@ int FP_Decoder::hardDecision(const int *in)
 	}
 	return 0;
 }
+
+int FP_Decoder::checkPost_fp_general()
+{
+	int i, j, k;
+	int shift;
+	unsigned int deg;
+	static unsigned int varaddr;
+	static unsigned int chkaddr;
+	static unsigned int checksum, checksumtemp;
+	// full check
+	for(i = 0; i < CWD_LENGTH; i++)
+	{
+		DecodedCodeword[i] = getPost_fp(i) > 0 ? 0:1;
+	}
+
+	for(i = 0; i < NUM_CGRP; i ++)
+	{
+		for(j = 0; j < CIR_SIZE; j++)
+		{
+			checksum = 0;
+			//checksumtemp = 0;
+			chkaddr = j + i*CIR_SIZE;
+			deg = cdeg[chkaddr];
+			for(k = 0; k < deg; k++)
+			{
+				//--- for array code only
+				//shift = CodeROM.getCirShift(i, k);
+				//varaddr = (shift + j)% CIR_SIZE + k*NUM_VGRP;
+				//--- 
+				varaddr = clist[chkaddr][k];
+				checksum ^= (DecodedCodeword[varaddr]);
+				//checksumtemp ^= (TrueCodeword[varaddr]);	
+			}
+			if(checksum != 0)
+				return 1; // check sum does not pass
+		}
+	}
+	return 0; // check sum pass
+}
+
+int FP_Decoder::checkPost()
+{
+	int i, j, k;
+	int shift;
+	unsigned int deg;
+	static unsigned int varaddr;
+	static unsigned int chkaddr;
+	static unsigned int checksum, checksumtemp;
+	// full check
+	for(i = 0; i < CWD_LENGTH; i++)
+	{
+		DecodedCodeword[i] = getPost(i) > 0 ? 0:1;
+	}
+
+	for(i = 0; i < NUM_CGRP; i ++)
+	{
+		for(j = 0; j < CIR_SIZE; j++)
+		{
+			checksum = 0;
+			checksumtemp = 0;
+			chkaddr = j + i*CIR_SIZE;
+			deg = cdeg[chkaddr];
+			for(k = 0; k < deg; k++)
+			{
+				//--- for array code only
+				//shift = CodeROM.getCirShift(i, k);
+				//varaddr = (shift + j)% CIR_SIZE + k*NUM_VGRP;
+				//--- 
+				varaddr = clist[chkaddr][k];
+				checksum ^= (DecodedCodeword[varaddr]);
+				checksumtemp ^= (TrueCodeword[varaddr]);	
+			}
+			if(checksum != 0)
+				return 1; // check sum does not pass
+		}
+	}
+	return 0; // check sum pass
+}
+
+
 int FP_Decoder::checkPost_fp()
 {
 	int i, j, k;
@@ -653,7 +732,7 @@ double FP_Decoder::sxor(double x, double y){
 }
 
 
-int FP_Decoder::decode(const double *LLR)
+int FP_Decoder::decode_general(const double *LLR)
 {
 	//int Counter; 
 	int i, j, k;
@@ -694,7 +773,6 @@ int FP_Decoder::decode(const double *LLR)
 				BankSelect = k; //simply which vgroup we are at
 				EdgeRAM[BankSelect].setAddress(ChkAddr);	
 				EdgeRAM[BankSelect].wrtData(LLR[VarAddr]);
-				//temp = EdgeRAM[k].getData();
 			}
 		}
 	}
@@ -852,29 +930,4 @@ int FP_Decoder::decode(const double *LLR)
 	}
 	//checkPost();
 	return Iteration;
-}
-/* !!!!!!!!!
-need to modify to really check the parity check matrix!!!
-not urgent yet
-*/ // still for all zero codeword
-int FP_Decoder::checkPost()
-{
-	int i = 0;
-	BitError = 0;
-	double temp = 0;
-	for(i = 0; i < CWD_LENGTH; i++)
-	{
-		//temp = getPost(i);
-		if(getPost(i) < 0)
-		{
-			DecodedCodeword[i] = 1;
-			BitError++;
-		}
-		else
-		{
-			DecodedCodeword[i] = 0;
-		}
-	}
-
-	return BitError;
 }

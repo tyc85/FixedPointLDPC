@@ -14,7 +14,7 @@
 //#define CIRCULANT_SIZE 32
 
 using namespace std;
-enum Simulation {MAX_ITER = 10, NUM_PEEK = 1000000, SEED = 100};
+enum Simulation {MAX_ITER = 30, NUM_PEEK = 1000000, SEED = 100};
 enum CodeWifi {
 		NUM_VAR = 1944, NUM_CHK = 972, NUM_CGRP = 12, NUM_VGRP = 24, CHK_DEG = 8, VAR_DEG = 11,
 		P = 81, CIR_SIZE = 81, INFO_LENGTH = 972, CWD_LENGTH = 1944};
@@ -33,7 +33,7 @@ enum Precision {
 		INT_WIDTH_NOISE = 4, 
 		FRAC_WIDTH_NOISE = 12*/
 		INT_WIDTH = 4, 
-		FRAC_WIDTH = 3, 
+		FRAC_WIDTH = 4, 
 		INT_WIDTH_NOISE = 4, 
 		FRAC_WIDTH_NOISE = 6
 };
@@ -123,8 +123,8 @@ class FP_Decoder
 public:
 	
 	int decode_fixpoint(const int *LLR);
-	int decode_general(const int *LLR);
-	int decode(const double *LLR);  // use this for wifi code, test floating point first
+	int decode_general_fp(const int *LLR);
+	int decode_general(const double *LLR);  // use this for wifi code, test floating point first
 	int sgn(double);
 	int sgn(int);
 	int sxor(int, int);
@@ -133,7 +133,8 @@ public:
 	int check();
 	int check_fp(int*); // check whether the input vector pass the parity check matrix
 	int checkPost();
-	int checkPost_fp();
+	int checkPost_fp();// for arrary parity check
+	int checkPost_fp_general();  // for general parity check matrix fix point
 	int getPost_fp(int Addr){ return Posteriori_fp[Addr]; };
 	int getState(){ return FSM.getState();  };
 	void setState(int in){ FSM.setState(in);  };

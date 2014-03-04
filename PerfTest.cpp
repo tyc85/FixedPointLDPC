@@ -32,7 +32,7 @@ int ArrayLDPC_Debug_Wifi()
 	//char InfoStream[243] = "";// all zero info, exactly 243 bytes for wifi code
 	char InfoStream[122] = "OMG  how long   dd   should this string be to make it 243";
 	//int InfoBit[INFO_LENGTH];
-	//int Codewordtemp[CWD_LENGTH];
+	int Codewordtemp[CWD_LENGTH];
 	//double Receive[CWD_LENGTH];
 	//--- unused debugging varibles
 	int i, j;
@@ -70,7 +70,7 @@ int ArrayLDPC_Debug_Wifi()
 	// working now
 	//Encoder.encode(InfoStream, out, 248);
 	//---- 
-
+	// set the true information bits in the decoder to calculate BER
 	Decoder.setInfoBit(InfoStream, 122);
 	//for(i = 0; i < INFO_LENGTH; i++)
 	//{
@@ -83,7 +83,8 @@ int ArrayLDPC_Debug_Wifi()
 	{
 		info_indx[i] = Encoder.getInfoIndex(i);
 	}
-	//Decoder.setInfoIndex(info_indx);
+
+	Encoder.encode(InfoStream, 122);
 	Decoder.setInfoIndex(info_indx);
 	//for(i = 0; i < CWD_LENGTH; i++)
 	//		Codewordtemp[i] = Encoder.getCodeword(i);
@@ -98,7 +99,7 @@ int ArrayLDPC_Debug_Wifi()
 		//for(i = 247; i >= 0; i--)
 		//	cout << std::bitset<8>(InfoStream[i]) << ", ";
 		//cout <<endl;
-		Encoder.encode(InfoStream, 122);//WIFI code
+		//WIFI code
 		
 		//cout << "codeword checksum:" << Decoder.check_fp(Codewordtemp) <<endl;
 		//cout << "codeword checksum: (0 is pass, 1 is not pass):" << Decoder.check_fp(Codeword)<<endl;
@@ -113,7 +114,7 @@ int ArrayLDPC_Debug_Wifi()
 			//LLR[i] = 2*snr*(1 - 2*Encoder.getCodeword(i));
 			// Using Wallace method to generate Gaussian noise
 			//LLR[i] = 2*EbN0*(1 + Wallace(0, sigma));
-			//LLR_fp[i] = int(LLR[i]*(1<<FRAC_WIDTH));
+			LLR_fp[i] = int(LLR[i]*(1<<FRAC_WIDTH));
 		}
 		Decoder.setState(PCV);
 		
@@ -121,7 +122,8 @@ int ArrayLDPC_Debug_Wifi()
 		//cout << "checking hard output before decoding:" << Decoder.hardDecision(LLR_fp) << endl;
 		//blkerror = Decoder.decode(LLR);
 		//cout << Decoder.decode_fixpoint(LLR_fp) << " total iterations" <<endl;
-		Decoder.decode(LLR);
+		//Decoder.decode(LLR);
+		Decoder.decode_general_fp(LLR_fp);
 		Decoder.resetBER();
 		blkerror = Decoder.calculateBER();
 		if(blkerror > 0)
