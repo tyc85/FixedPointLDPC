@@ -79,11 +79,13 @@ int ArrayLDPC_Debug_Wifi()
 	//	info_indx[i] = i;
 	//}
 	// NEED IMPROVEMENT! SHOULD BE ABLE TO HAVE SYSTEMATIC BITS
+	//ofstream file("wifi_infoindx.txt");
 	for(i = 0; i < INFO_LENGTH; i++)
 	{
 		info_indx[i] = Encoder.getInfoIndex(i);
+		//file << info_indx[i] << " ";
 	}
-
+	//file.close();
 	Encoder.encode(InfoStream, 122);
 	Decoder.setInfoIndex(info_indx);
 	//for(i = 0; i < CWD_LENGTH; i++)
